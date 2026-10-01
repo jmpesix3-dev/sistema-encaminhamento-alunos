@@ -1,0 +1,13 @@
+streamlit==1.64.0
+sqlalchemy>=2.0.0
+openpyxl>=3.1.0
+pandas>=2.0.0
+reportlab>=4.0.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+folium>=0.15.0
+streamlit-folium>=0.12.0
+
+# Streamlit com versao fixa: versoes diferentes quebram recursos usados
+# nas telas (ex.: st.tabs com parametro index, st.columns com
+# vertical_alignment). Nao troque sem rodar os testes.

@@ -1,0 +1,42 @@
+# Ambiente virtual (nao viaja entre maquinas)
+venv/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Segredos: nunca versionar
+.env
+
+# Banco de dados e arquivos gerados
+encaminhamento/data/encaminhamento.db
+encaminhamento/data/*.db
+encaminhamento/data/geocode_cache.json
+encaminhamento/data/export/
+encaminhamento/data/import/
+encaminhamento/data/pdf/
+encaminhamento/data/backup/
+encaminhamento/data/resumo_*.xlsx
+
+# Logs e temporarios
+streamlit.log
+streamlit.err
+*.log
+~$*.xlsx
+.~lock.*#
+
+# Gerados pelos testes
+_testes_paginas/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editores
+.vscode/
+.idea/
