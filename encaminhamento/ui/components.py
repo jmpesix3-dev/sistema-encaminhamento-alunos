@@ -18,25 +18,49 @@ def ir_para(pagina: str, **estado):
     st.rerun()
 
 
-def seletor_abas(nomes: list, inicial: int = 0, chave: str = "abas") -> int:
+def seletor_abas(
+    nomes: list,
+    inicial: int = 0,
+    chave: str = "abas",
+    forcar: bool = False,
+) -> int:
     """
     Seletor de abas que abre numa aba especifica.
 
     O st.tabs() desta versao do Streamlit nao aceita `index`, entao
     usamos o segmented_control e devolvemos o indice escolhido. Quem
     chama renderiza apenas o conteudo da aba selecionada.
+
+    forcar=True sobrescreve a aba atual - use quando o usuario veio
+    por redirecionamento do painel e precisa abrir numa aba especifica.
     """
     if inicial >= len(nomes):
         inicial = 0
 
-    escolhido = st.segmented_control(
-        "Seção",
-        nomes,
-        default=nomes[inicial],
-        selection_mode="single",
-        label_visibility="collapsed",
-        key=chave,
-    )
+    atual = st.session_state.get(chave)
+
+    # Definir no session_state ANTES de criar o widget e o jeito confiavel:
+    # o parametro `default` so vale na primeira renderizacao, e num
+    # redirecionamento do painel essa ja foi a primeira.
+    if forcar or atual not in nomes:
+        st.session_state[chave] = nomes[inicial]
+        # Com o valor no session_state, passar default gera aviso
+        escolhido = st.segmented_control(
+            "Seção",
+            nomes,
+            selection_mode="single",
+            label_visibility="collapsed",
+            key=chave,
+        )
+    else:
+        escolhido = st.segmented_control(
+            "Seção",
+            nomes,
+            default=nomes[inicial],
+            selection_mode="single",
+            label_visibility="collapsed",
+            key=chave,
+        )
 
     if escolhido in nomes:
         return nomes.index(escolhido)

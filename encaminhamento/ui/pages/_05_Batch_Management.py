@@ -19,17 +19,20 @@ from encaminhamento.services.status_tracker import auto_advance_batch_status
 
 def render():
     sidebar_navigation()
-    
+
     st.title("📦 Gestão de Lotes de Encaminhamento")
     st.caption("Crie e gerencie lotes de encaminhamento por escola de destino")
-    
-    # Aba enviada pelo painel
-    st.session_state.pop("ir_lote_status", None)
+
+    # Filtro enviado pelo painel (etapa de lote)
+    ir_status = st.session_state.pop("ir_lote_status", None)
     inicial = 1
     escolhida = seletor_abas(
         ["➕ Criar Lote", "📋 Gerenciar Lotes"], inicial, chave="abas_lotes"
     )
-    
+    # O widget guarda a aba antiga; nesta renderizacao a do filtro vale
+    if ir_status:
+        escolhida = inicial
+
     if escolhida == 0:
         st.subheader("Novo Lote de Encaminhamento")
         
@@ -167,8 +170,8 @@ def render():
     
     elif escolhida == 1:
         st.subheader("Lotes Existentes")
-        
-        # Filters
+
+        # Filtros
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             filter_origin = school_selector("Origem", key="batch_filter_origin", is_origin=True, allow_new=False)
@@ -180,9 +183,18 @@ def render():
                 key="batch_filter_year",
             )
         with col4:
+            # Se veio do painel, define o status antes de criar o widget
+            # (o index= so valeria na primeira renderizacao)
+            if ir_status in ("draft", "generated", "sent", "completed"):
+                rotulo_ir = rotulo_lote(ir_status)
+                if rotulo_ir in opcoes_lote():
+                    st.session_state["batch_filter_status"] = rotulo_ir
             filter_status = st.selectbox(
                 "Status", ["Todos"] + opcoes_lote(), key="batch_filter_status"
             )
+
+        if ir_status and ir_status in ("draft", "generated", "sent", "completed"):
+            st.info(f"Mostrando lotes com status **{rotulo_lote(ir_status)}**.")
 
         with get_session() as session:
             batches = list_batches(

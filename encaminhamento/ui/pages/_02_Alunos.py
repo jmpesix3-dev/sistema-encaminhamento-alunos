@@ -252,23 +252,39 @@ def _aba_manual():
 # ======================================================================
 # ABA 3 - EDITAR DADOS
 # ======================================================================
-def _aba_editar(filtro_status: str = None, filtro_destino: int = None):
+def _aba_editar(filtro_status: str = None, filtro_destino: int = None,
+                filtro_origem: int = None):
     st.subheader("Editar alunos cadastrados")
+
+    # O painel pode pedir uma etapa especifica ou os que ficaram sem vaga
+    etapas = {
+        "draft": "Rascunho", "pending": "Pendente", "sent": "Enviado",
+        "confirmed": "Confirmado", "cancelled": "Cancelado",
+    }
 
     if filtro_status == "sem_vaga":
         st.info("Mostrando alunos **sem vaga** (nenhuma escola definida).")
-    if filtro_destino:
-        st.info("Mostrando alunos que apontaram para uma escola específica como destino.")
+    elif filtro_status in etapas:
+        st.info(f"Mostrando alunos com status **{etapas[filtro_status]}**.")
+    if filtro_origem:
+        st.info("Mostrando alunos de uma escola de origem especifica.")
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        f_origem = school_selector("Escola de origem", key="ed_origem", is_origin=True, allow_new=False)
+        f_origem = school_selector(
+            "Escola de origem", key="ed_origem", is_origin=True,
+            allow_new=False, filtro_id=filtro_origem,
+        )
     with col2:
         f_dest = school_selector(
             "Escola de destino", key="ed_dest", is_destination=True,
             allow_new=False, filtro_id=filtro_destino,
         )
     with col3:
+        # Se veio do painel, define o status antes de criar o widget
+        # (o index= so valeria na primeira renderizacao)
+        if filtro_status in etapas and etapas[filtro_status] in opcoes_aluno():
+            st.session_state["ed_status"] = etapas[filtro_status]
         f_status = st.selectbox(
             "Status", ["Todos"] + opcoes_aluno(), key="ed_status"
         )
@@ -287,11 +303,14 @@ def _aba_editar(filtro_status: str = None, filtro_destino: int = None):
                 if a.allocated_school_id is None
             ]
         else:
+            status = (para_valor_aluno(etapas[filtro_status])
+                      if filtro_status in etapas
+                      else para_valor_aluno(f_status))
             alunos = list_students(
                 session,
                 origin_school_id=f_origem["id"] if f_origem else None,
                 destination_school_id=f_dest["id"] if f_dest else None,
-                status=para_valor_aluno(f_status),
+                status=status,
                 search=busca or None,
                 limit=1000,
             )
@@ -455,23 +474,34 @@ def render():
     # Filtros enviados pelo painel: abrem a aba certa ja filtrada
     ir_aba = st.session_state.pop("ir_aba", None)
     ir_status = st.session_state.pop("ir_aluno_status", None)
+    ir_origem = st.session_state.pop("ir_aluno_origem", None)
 
-    if ir_status == "sem_vaga":
-        ir_aba = "editar"
+    redirecionado = bool(ir_status or ir_origem)
 
     abas = ["📤 Carregar Planilha", "✏️ Cadastro Manual", "📝 Editar Dados", "📊 Exportar"]
-    if ir_aba in abas:
-        inicial = abas.index(ir_aba)
+    # indice 2 = aba Editar. Comparar pelo texto nao funciona porque
+    # os rotulos tem emoji.
+    indice_editar = 2
+
+    if redirecionado:
+        inicial = indice_editar
+    elif ir_aba in ("upload", "editar", "manual", "exportar"):
+        inicial = {"upload": 0, "manual": 1, "editar": 2, "exportar": 3}[ir_aba]
     else:
         inicial = 0
 
     escolhida = seletor_abas(abas, inicial, chave="abas_alunos")
+
+    # O widget guarda a aba anterior; na renderizacao que recebe o
+    # filtro do painel, vale a aba pedida
+    if redirecionado:
+        escolhida = indice_editar
 
     if escolhida == 0:
         _aba_upload()
     elif escolhida == 1:
         _aba_manual()
     elif escolhida == 2:
-        _aba_editar(filtro_status=ir_status)
+        _aba_editar(filtro_status=ir_status, filtro_origem=ir_origem)
     else:
         _aba_exportar()

@@ -29,6 +29,9 @@ streamlit.err
 ~$*.xlsx
 .~lock.*#
 
+# Gerado pelo instalador
+PYTHON_ENCONTRADO.txt
+
 # Gerados pelos testes
 _testes_paginas/
 

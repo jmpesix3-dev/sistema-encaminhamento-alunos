@@ -33,6 +33,17 @@ ROTULO_STATUS_LOTE = {
 ORDEM_ALUNO = ["draft", "pending", "sent", "confirmed", "cancelled"]
 ORDEM_LOTE = ["draft", "generated", "sent", "completed"]
 
+# Cor de cada etapa, usada no painel
+COR_STATUS = {
+    "draft": "#9aa5b1",       # cinza: ainda nao comecou
+    "pending": "#f0a30a",     # ambar: esperando
+    "generated": "#2f7ed8",   # azul: PDF pronto
+    "sent": "#7c5cd6",        # roxo: em transito
+    "confirmed": "#1f9d55",   # verde: resolvido
+    "completed": "#1f9d55",   # verde: resolvido
+    "cancelled": "#d64545",   # vermelho: cancelado
+}
+
 
 @dataclass
 class Pendencia:
@@ -543,6 +554,85 @@ def detalhar_pendencia(chave: str) -> List[dict]:
             return linhas
 
     return []
+
+
+def detalhar_alunos_por_escola(somente_com_alunos: bool = True) -> List[dict]:
+    """
+    Alunos por escola de origem, quebrados por etapa.
+
+    Uma linha por escola, com o total, quantos estao em cada etapa,
+    quantos ja foram alocados e a capacidade da escola.
+
+    Fica fora de montar_resumo() de proposito: o menu lateral conta as
+    pendencias em toda pagina e nao deve pagar por esta consulta.
+    """
+    with get_session() as session:
+        # Uma linha por (escola de origem, status)
+        consulta = (
+            select(
+                School.id,
+                School.name,
+                School.distrito,
+                School.oferta,
+                Student.status,
+                func.count(Student.id).label("quantidade"),
+            )
+            .join(Student, Student.origin_school_id == School.id)
+            .group_by(School.id, Student.status)
+        )
+        if somente_com_alunos:
+            consulta = consulta.having(func.count(Student.id) > 0)
+
+        contagens = session.execute(consulta).all()
+
+        # Alocados e lotes por escola de destino
+        alocados_por_escola = dict(session.execute(
+            select(Student.allocated_school_id, func.count(Student.id))
+            .where(Student.allocated_school_id.isnot(None))
+            .group_by(Student.allocated_school_id)
+        ).all())
+
+    # Monta uma linha por escola, juntando as etapas
+    por_escola = {}
+    for escola_id, nome, distrito, oferta, status, quantidade in contagens:
+        linha = por_escola.setdefault(escola_id, {
+            "id": escola_id,
+            "escola": nome,
+            "distrito": distrito or "",
+            "capacidade": oferta or 0,
+            "total": 0,
+            "draft": 0,
+            "pending": 0,
+            "sent": 0,
+            "confirmed": 0,
+            "cancelled": 0,
+        })
+        chave = getattr(status, "value", status)
+        linha[chave] = quantidade
+        linha["total"] += quantidade
+
+    linhas = []
+    for linha in por_escola.values():
+        alocados = alocados_por_escola.get(linha["id"], 0)
+        capacidade = linha["capacidade"]
+        linhas.append({
+            "id": linha["id"],
+            "Escola": linha["escola"],
+            "Distrito": linha["distrito"],
+            "Alunos": linha["total"],
+            "Rascunho": linha["draft"],
+            "Pendente": linha["pending"],
+            "Enviado": linha["sent"],
+            "Confirmado": linha["confirmed"],
+            "Alocados": alocados,
+            "Capacidade": capacidade,
+            "Vagas livres": capacidade - alocados,
+            "Ocupacao": (f"{alocados / capacidade * 100:.0f}%" if capacidade else "-"),
+        })
+
+    # Quem mais tem alunos primeiro
+    linhas.sort(key=lambda r: (-r["Alunos"], r["Escola"]))
+    return linhas
 
 
 def exportar_resumo(resumo: Resumo, caminho: str) -> str:

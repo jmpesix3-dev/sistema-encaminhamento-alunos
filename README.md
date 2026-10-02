@@ -13,10 +13,33 @@ correspondente ao sistema operacional:
 | **Windows** | clique duas vezes em `instalar.bat` |
 | **Mac / Linux** | clique duas vezes em `instalar.sh` (ou `bash instalar.sh`) |
 
-O instalador cria o ambiente virtual, instala as dependências e pergunta se
-quer iniciar. Precisa de **Python 3.10 ou mais novo**.
+Precisa de **Python 3.10 ou mais novo**.
 
-Depois de instalado, para iniciar em uso direto:
+### No Windows, o instalador cuida do Python sozinho
+
+Se o computador não tiver Python, o `instalar.bat` tenta duas coisas, nesta
+ordem:
+
+1. **winget** — se existir (Windows 10 ou mais novo)
+2. **Instalador do python.org em modo usuário** — baixa e instala **sem
+   pedir permissão de administrador**, gravando na pasta do seu usuário
+
+Só se as duas falharem é que aparece o link para instalar manualmente.
+
+### No Mac e Linux, o Python precisa vir antes
+
+A instalação automática nesses sistemas pede a senha de administrador, então
+o script apenas detecta o que falta e mostra o comando exato:
+
+```bash
+brew install python                          # Mac
+sudo apt install python3 python3-venv         # Ubuntu/Debian
+sudo dnf install python3                     # Fedora/RHEL
+```
+
+Depois de instalado o Python, rode o `instalar.sh` de novo.
+
+Depois da instalação, para iniciar em uso direto:
 
 | Sistema | Comando |
 |---|---|

@@ -6,25 +6,18 @@ situacao e onde clicar para ir resolver.
 """
 import streamlit as st
 import pandas as pd
-
-from encaminhamento.ui.components import sidebar_navigation, ir_para
-from encaminhamento.services.relatorio import (
-    montar_resumo, exportar_resumo, detalhar_pendencia,
-    ROTULO_STATUS_ALUNO, ROTULO_STATUS_LOTE,
-    ORDEM_ALUNO, ORDEM_LOTE,
-)
-from encaminhamento.config import DATA_DIR
 from datetime import datetime
 
-COR_STATUS = {
-    "draft": "#9aa5b1",
-    "pending": "#f0a30a",
-    "sent": "#2f7ed8",
-    "confirmed": "#1f9d55",
-    "cancelled": "#d64545",
-    "generated": "#2f7ed8",
-    "completed": "#1f9d55",
-}
+from encaminhamento.ui.components import sidebar_navigation, ir_para
+from encaminhamento.database import get_session
+from encaminhamento.database.crud import list_schools
+from encaminhamento.services.relatorio import (
+    montar_resumo, exportar_resumo, detalhar_pendencia,
+    detalhar_alunos_por_escola,
+    ROTULO_STATUS_ALUNO, ROTULO_STATUS_LOTE,
+    ORDEM_ALUNO, ORDEM_LOTE, COR_STATUS,
+)
+from encaminhamento.config import DATA_DIR
 
 PASSOS = [
     ("1", "Carregar planilha", "Receber a demanda das escolas", "Alunos", {"aba": "upload"}),
@@ -33,48 +26,6 @@ PASSOS = [
     ("4", "Gerar e enviar", "PDF e envio para a escola", "Batch_Management", {"lote_status": "todos"}),
 ]
 
-
-def _barra_status(rotulos, valores):
-    """Barras horizontais com rotulo, barra e contagem."""
-    total = sum(valores.values()) or 1
-    for chave in rotulos:
-        v = valores.get(chave, 0)
-        if v <= 0:
-            continue
-        pct = v / total
-        cols = st.columns([2, 5, 1])
-        with cols[0]:
-            st.caption(ROTULO_STATUS_ALUNO.get(chave) or ROTULO_STATUS_LOTE.get(chave, chave))
-        with cols[1]:
-            # st.progress nao aceita cor, entao a barra usa a cor padrao
-            st.progress(min(pct, 1.0), text=None)
-        with cols[2]:
-            st.caption(f"**{v}**")
-
-
-def _indicadores(resumo):
-    """Linha de indicadores clicaveis."""
-    c = st.columns(5)
-
-    itens = [
-        ("🏫 Escolas", resumo.escolas, "Escolas", {}, "normal"),
-        ("👥 Alunos", resumo.alunos, "Alunos", {}, "normal"),
-        ("✅ Alocados", resumo.alocados, "Auto_Allocation", {"alocacao": "previa"}, "normal"),
-        ("⛔ Sem vaga", resumo.sem_vaga, "Alunos", {"aluno_status": "sem_vaga"},
-         "inverse" if resumo.sem_vaga else "normal"),
-        ("📦 Lotes", resumo.lotes, "Batch_Management", {"lote_status": "todos"},
-         "inverse" if resumo.lotes and not resumo.por_status_lote.get("completed") else "normal"),
-    ]
-
-    for col, (titulo, valor, pagina, estado, cor) in zip(c, itens):
-        with col:
-            if st.button(
-                f"{titulo}\n\n**{valor}**",
-                use_container_width=True,
-                key=f"ind_{titulo}",
-                type="secondary" if valor else "secondary",
-            ):
-                ir_para(pagina, **estado)
 
 
 def _passos():
@@ -155,25 +106,155 @@ def _pendencias(resumo):
                         _cartao_pendencia(p, destaque=False)
 
 
-def _situacao(resumo):
-    """Situacao de alunos e lotes, lado a lado."""
-    st.subheader("Situação")
+def _cards_etapa(rotulos, valores, total, pagina, chave_estado, prefixo):
+    """
+    Um card por etapa, com numero, porcentagem e barra na cor da etapa.
 
-    c1, c2 = st.columns(2)
+    Etapa vazia continua aparecendo com 0%, para dar forma ao fluxo.
+    """
+    n = len(rotulos)
+    cols = st.columns(n)
+
+    for col, chave in zip(cols, rotulos):
+        quantidade = valores.get(chave, 0)
+        pct = (quantidade / total * 100) if total else 0
+        rotulo = ROTULO_STATUS_ALUNO.get(chave) or ROTULO_STATUS_LOTE.get(chave, chave)
+        cor = COR_STATUS.get(chave, "#2f7ed8")
+
+        with col:
+            st.markdown(
+                f"""
+                <div style="
+                    border:1px solid {cor}55;
+                    border-top:3px solid {cor};
+                    border-radius:8px;
+                    padding:10px 12px;
+                    margin-bottom:4px;">
+                  <div style="font-size:12px;color:#5a6472;margin-bottom:2px;">{rotulo}</div>
+                  <div style="font-size:26px;font-weight:600;color:{cor};line-height:1.1;">{quantidade}</div>
+                  <div style="font-size:12px;color:#8a94a6;margin-bottom:8px;">{pct:.0f}% do total</div>
+                  <div style="background:#eef1f6;border-radius:3px;height:6px;overflow:hidden;">
+                    <div style="background:{cor};width:{max(pct, 1.5)}%;height:6px;"></div>
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            # O botao fica fora do card para o clique funcionar bem
+            if st.button(
+                "Ver lista",
+                key=f"{prefixo}_{chave}",
+                use_container_width=True,
+                disabled=quantidade == 0,
+            ):
+                ir_para(pagina, **{chave_estado: chave})
+
+
+def _situacao_por_escola():
+    """Visao por escola de origem."""
+    st.markdown("**Por escola**")
+
+    linhas = detalhar_alunos_por_escola()
+
+    if not linhas:
+        st.info("Nenhum aluno cadastrado.")
+        return
+
+    # Filtro por escola
+    nomes = {l["id"]: l["Escola"] for l in linhas}
+    c1, c2 = st.columns([2, 1])
 
     with c1:
-        st.markdown("**Alunos**")
-        if any(resumo.por_status_aluno.values()):
-            _barra_status(ORDEM_ALUNO, resumo.por_status_aluno)
-        else:
-            st.info("Nenhum aluno cadastrado.")
+        escolhida = st.selectbox(
+            "Escola de origem",
+            options=[None] + list(nomes.keys()),
+            format_func=lambda i: "Todas as escolas" if i is None else nomes[i],
+            key="situacao_escola",
+        )
 
     with c2:
-        st.markdown("**Lotes**")
-        if any(resumo.por_status_lote.values()):
-            _barra_status(ORDEM_LOTE, resumo.por_status_lote)
-        else:
-            st.info("Nenhum lote criado.")
+        st.write("")
+        st.write("")
+        if escolhida is not None and st.button(
+            "Ver alunos", key="situacao_ver_alunos", use_container_width=True
+        ):
+            ir_para("Alunos", aluno_origem=escolhida)
+
+    visiveis = [l for l in linhas if escolhida is None or l["id"] == escolhida]
+
+    if len(linhas) > 1:
+        st.caption(f"{len(linhas)} escolas com alunos, de {resumo_total_escolas()} cadastradas.")
+
+    tabela = pd.DataFrame([{
+        "Escola": l["Escola"],
+        "Distrito": l["Distrito"],
+        "Alunos": l["Alunos"],
+        "Rascunho": l["Rascunho"],
+        "Pendente": l["Pendente"],
+        "Enviado": l["Enviado"],
+        "Confirmado": l["Confirmado"],
+        "Alocados": l["Alocados"],
+        "Capacidade": l["Capacidade"],
+        "Vagas livres": l["Vagas livres"],
+        "Ocupação": l["Ocupacao"],
+    } for l in visiveis])
+
+    st.dataframe(
+        tabela,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            c: st.column_config.NumberColumn(c, format="%d")
+            for c in ("Alunos", "Rascunho", "Pendente", "Enviado",
+                      "Confirmado", "Alocados", "Capacidade", "Vagas livres")
+        },
+    )
+
+
+_TOTAL_ESCOLAS = []
+
+
+def resumo_total_escolas():
+    """Total de escolas cadastradas (guardado entre redesenhos)."""
+    if not _TOTAL_ESCOLAS:
+        with get_session() as session:
+            _TOTAL_ESCOLAS.append(len(list_schools(session)))
+    return _TOTAL_ESCOLAS[0]
+
+
+def _situacao(resumo):
+    """Situacao de alunos e lotes por etapa, mais a visao por escola."""
+    st.subheader("Situação")
+
+    # ---- Alunos ----
+    total_alunos = resumo.alunos
+    st.markdown(f"**Alunos** — {total_alunos} no total")
+    if total_alunos:
+        _cards_etapa(
+            ORDEM_ALUNO, resumo.por_status_aluno, total_alunos,
+            "Alunos", "aluno_status", "etapa_aluno",
+        )
+    else:
+        st.info("Nenhum aluno cadastrado.")
+
+    st.divider()
+
+    # ---- Lotes ----
+    total_lotes = resumo.lotes
+    st.markdown(f"**Lotes** — {total_lotes} no total")
+    if total_lotes:
+        _cards_etapa(
+            ORDEM_LOTE, resumo.por_status_lote, total_lotes,
+            "Batch_Management", "lote_status", "etapa_lote",
+        )
+    else:
+        st.info("Nenhum lote criado.")
+
+    st.divider()
+
+    # ---- Por escola ----
+    _situacao_por_escola()
 
 
 def _escolas_atencao(resumo):
@@ -278,9 +359,6 @@ def render():
 
     st.divider()
     _pendencias(resumo)
-
-    st.divider()
-    _indicadores(resumo)
 
     st.divider()
     _situacao(resumo)

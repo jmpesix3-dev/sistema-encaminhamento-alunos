@@ -1,37 +1,65 @@
 @echo off
-REM Instalador - Sistema de Encaminhamento de Alunos
-REM DCLICK neste arquivo para instalar e rodar.
+REM ===========================================================================
+REM  Instalador - Sistema de Encaminhamento de Alunos (Windows)
+REM
+REM  Este script instala o Python se faltar, cria o ambiente virtual,
+REM  instala as dependencias e sobe o sistema.
+REM
+REM  DCLICK neste arquivo.
+REM ===========================================================================
 
 setlocal
 cd "%~dp0"
 
-REM Procura o Python: tenta py, depois python
-where py >nul 2>nul
-if %errorlevel%==0 (
-    set PY=py -3
-    goto rodar
+echo.
+echo ==============================================================
+echo   SISTEMA DE ENCAMINHAMENTO DE ALUNOS
+echo   Instalacao
+echo ==============================================================
+echo.
+
+REM --------------------------------------------------------------------------
+REM  Garante o Python
+REM --------------------------------------------------------------------------
+call "%~dp0obter_python.bat"
+set PY_OK=%errorlevel%
+
+if not "%PY_OK%"=="0" (
+    echo.
+    echo   Instale o Python e rode instalar.bat de novo.
+    echo.
+    pause
+    endlocal & exit /b 1
 )
 
-where python >nul 2>nul
-if %errorlevel%==0 (
-    set PY=python
-    goto rodar
+REM --------------------------------------------------------------------------
+REM  Descobre o executavel do Python
+REM --------------------------------------------------------------------------
+set PY_CMD=
+if exist "%~dp0PYTHON_ENCONTRADO.txt" (
+    set /p PY_CMD=< "%~dp0PYTHON_ENCONTRADO.txt"
 )
 
-echo.
-echo   Python nao encontrado neste computador.
-echo.
-echo   Instale o Python 3.10 ou mais novo:
-echo     https://www.python.org/downloads/
-echo.
-echo   No Windows, marque "Add Python to PATH" durante a instalacao.
-echo.
-pause
-exit /b 1
+if not defined PY_CMD (
+    where py >nul 2>nul && set PY_CMD=py -3
+)
+if not defined PY_CMD (
+    where python >nul 2>nul && set PY_CMD=python
+)
 
-:rodar
-echo.
-%PY% instalar.py %*
+if not defined PY_CMD (
+    echo.
+    echo   Nao consegui localizar o Python depois da instalacao.
+    echo   Reinicie o computador e tente de novo.
+    echo.
+    pause
+    endlocal & exit /b 1
+)
+
+REM --------------------------------------------------------------------------
+REM  Instala o sistema
+REM --------------------------------------------------------------------------
+%PY_CMD% instalar.py %*
 set ERRO=%errorlevel%
 
 if not "%ERRO%"=="0" (
