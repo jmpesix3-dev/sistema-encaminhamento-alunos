@@ -5,6 +5,7 @@ Centraliza os numeros do sistema e a lista de pendencias, para que o
 painel e o aviso do menu lateral leiam sempre a mesma fonte.
 """
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import List
 
 from sqlalchemy import func, select
@@ -300,8 +301,55 @@ def montar_resumo() -> Resumo:
                 criticidade=3,
             ))
 
+    # 10) Versao nova no GitHub
+    nova_versao = _pendencia_atualizacao()
+    if nova_versao:
+        pendencias.append(nova_versao)
+
     resumo.pendencias = sorted(pendencias, key=lambda p: (p.criticidade, -p.quantidade))
     return resumo
+
+
+def _pendencia_atualizacao():
+    """
+    Versao nova disponivel no GitHub.
+
+    Le apenas o cache: a consulta de rede acontece uma vez por sessao,
+    em app.py. Assim o painel nunca fica lento ao abrir.
+    """
+    from encaminhamento.services import atualizacao
+
+    if not atualizacao.ha_atualizacao():
+        return None
+
+    dados = atualizacao.estado()
+    commit = (dados.get("commit_remoto") or "")[:7]
+    mensagem = dados.get("mensagem", "")
+    data = dados.get("data_commit", "")
+
+    quando = ""
+    if data:
+        try:
+            quando = datetime.fromisoformat(
+                data.replace("Z", "+00:00")
+            ).strftime("%d/%m/%Y")
+        except ValueError:
+            quando = ""
+
+    descricao = mensagem or "Ha uma versao nova disponivel."
+    if quando:
+        descricao += f"  ({quando})"
+
+    return Pendencia(
+        chave="atualizacao",
+        titulo="Nova versão disponível",
+        quantidade=1,
+        descricao=f"{descricao}  —  versão {commit}",
+        pagina="Atualizar",
+        estado={"atualizar": commit},
+        # criticidade 0: fica acima de tudo, para o botao aparecer
+        criticidade=0,
+    )
 
 
 # ======================================================================

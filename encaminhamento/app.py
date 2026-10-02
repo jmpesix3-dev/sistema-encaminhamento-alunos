@@ -41,9 +41,13 @@ st.markdown("""
 
 
 def main():
+    # Consulta de atualizacao: uma vez por sessao, e apenas se ja
+    # passou o intervalo. Falha de internet nao trava o sistema.
+    _verificar_atualizacao()
+
     # Route to appropriate page
     page = st.session_state.current_page
-    
+
     if page == "Dashboard":
         from encaminhamento.ui.pages._01_Dashboard import render
     elif page == "Alunos":
@@ -56,10 +60,27 @@ def main():
         from encaminhamento.ui.pages._06_Automation import render
     elif page == "Auto_Allocation":
         from encaminhamento.ui.pages._07_Auto_Allocation import render
+    elif page == "Atualizar":
+        from encaminhamento.ui.pages._08_Atualizacao import render
     else:
         from encaminhamento.ui.pages._01_Dashboard import render
-    
+
     render()
+
+
+def _verificar_atualizacao():
+    """Procura versao nova, respeitando o intervalo de horas."""
+    if st.session_state.get("_atualizacao_verificada"):
+        return
+    st.session_state["_atualizacao_verificada"] = True
+
+    try:
+        from encaminhamento.services import atualizacao
+        atualizacao.verificar()
+    except Exception:
+        # Sem internet, sem registro, qualquer eventualidade:
+        # o sistema abre normalmente.
+        pass
 
 
 if __name__ == "__main__":

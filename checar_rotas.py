@@ -37,6 +37,19 @@ for m in re.finditer(r'ir_para\(\s*"(\w+)"\s*,\s*(\w+)\s*=', dash):
     pagina, chave = m.group(1), m.group(2)
     geradas.setdefault(f"ir_{chave}", set()).add(f"{pagina} (direto)")
 
+# Pendencias: ir_para(pagina, **p.estado) monta ir_<chave> do Pendencia
+from encaminhamento.services.relatorio import montar_resumo
+
+for p in montar_resumo().pendencias:
+    for chave in p.estado:
+        geradas.setdefault(f"ir_{chave}", set()).add(f"{p.pagina} (pendencia {p.chave})")
+
+# Pendencias que so existem em caso especifico (ex.: ha versao nova).
+# O codigo que monta a Pendencia fica em relatorio.py.
+relatorio = pathlib.Path("encaminhamento/services/relatorio.py").read_text(encoding="utf-8")
+for chave_estado in set(re.findall(r'estado=\{"(\w+)"', relatorio)):
+    geradas.setdefault(f"ir_{chave_estado}", set()).add("relatorio.py (Pendencia)")
+
 print("2. Chaves geradas no painel")
 for chave, origens in sorted(geradas.items()):
     print(f"   {chave:<20} {', '.join(sorted(origens))}")

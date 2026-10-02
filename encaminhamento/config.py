@@ -30,6 +30,17 @@ APP_TITLE = "Sistema de Encaminhamento de Alunos"
 APP_ICON = "📋"
 PAGE_LAYOUT = "wide"
 
+# Atualizacao -------------------------------------------------------
+# Repositorio de onde o sistema busca as versoes novas. O endereco e
+# fixo no codigo: o usuario nao informa nenhuma URL.
+REPOSITORIO = os.getenv("REPOSITORIO", "jmpesix3-dev/sistema-encaminhamento-alunos")
+BRANCH = os.getenv("BRANCH", "master")
+
+# A API publica do GitHub permite 60 requisicoes por hora por IP.
+# Com 6 horas de intervalo, mesmo abrindo o sistema muitas vezes por
+# dia sai apenas uma consulta.
+INTERVALO_VERIFICACAO_HORAS = int(os.getenv("INTERVALO_VERIFICACAO_HORAS", "6"))
+
 # Geolocalizacao -----------------------------------------------------
 # Chave do Google Maps Geocoding API. Sem a chave, o sistema usa
 # o OpenStreetMap (Nominatim) e, em ultimo caso, a posicao por distrito.

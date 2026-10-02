@@ -19,6 +19,7 @@ PAGINAS = {
     "lotes": "_05_Batch_Management",
     "automacao": "_06_Automation",
     "alocacao": "_07_Auto_Allocation",
+    "atualizacao": "_08_Atualizacao",
 }
 
 CONTEUDO = """import sys

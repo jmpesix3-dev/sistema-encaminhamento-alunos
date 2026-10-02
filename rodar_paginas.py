@@ -17,6 +17,7 @@ ROTULOS = {
     "lotes": "Lotes",
     "automacao": "Automacao",
     "alocacao": "Alocacao",
+    "atualizacao": "Atualizacao",
 }
 
 falhas = 0

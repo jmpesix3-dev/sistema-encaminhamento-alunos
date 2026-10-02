@@ -16,6 +16,7 @@ __pycache__/
 encaminhamento/data/encaminhamento.db
 encaminhamento/data/*.db
 encaminhamento/data/geocode_cache.json
+encaminhamento/data/atualizacao.json
 encaminhamento/data/export/
 encaminhamento/data/import/
 encaminhamento/data/pdf/

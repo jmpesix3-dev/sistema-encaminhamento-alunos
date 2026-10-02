@@ -248,6 +248,7 @@ def sidebar_navigation():
             "🎯 Alocação Automática": "Auto_Allocation",
             "📦 Gestão de Lotes": "Batch_Management",
             "⚙️ Automação": "Automation",
+            "⬇️ Atualizar": "Atualizar",
         }
 
         for label, key in pages.items():
