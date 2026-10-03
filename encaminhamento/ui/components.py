@@ -10,15 +10,10 @@ def ir_para(pagina: str, **estado):
 
     As chaves passadas em `estado` viram `ir_<chave>` no session_state,
     e a pagina de destino aplica e limpa.
-
-    Marca que a navegacao veio daqui, para o menu lateral nao voltar
-    para a pagina anterior: o widget de menu guarda o valor antigo e
-    sobrescreveria a escolha.
     """
     for chave, valor in estado.items():
         st.session_state[f"ir_{chave}"] = valor
     st.session_state.current_page = pagina
-    st.session_state["_menu_navegou"] = True
     st.rerun()
 
 
@@ -252,18 +247,22 @@ def sidebar_navigation():
         n_tipos = len(pendencias)
         afetados = sum(p.quantidade for p in pendencias)
 
-        # Mostra quantos TIPOS de pendencia, e quantos itens afetam
+        # Mostra quantos TIPOS de pendencia, e quantos itens afetam.
+        # Fica num cartao para nao se confundir com um item do menu.
         if n_tipos:
-            if st.button(
-                f"⚠️ {n_tipos} pendência{'s' if n_tipos > 1 else ''}"
-                f" · {afetados} itens",
-                use_container_width=True,
-                key="nav_pendencias",
-            ):
-                st.session_state.current_page = "Dashboard"
-                st.rerun()
+            with st.container(border=True):
+                if st.button(
+                    f"⚠️ {n_tipos} pendência{'s' if n_tipos > 1 else ''}"
+                    f" · {afetados} itens",
+                    use_container_width=True,
+                    key="nav_pendencias",
+                ):
+                    st.session_state.current_page = "Dashboard"
+                    st.rerun()
 
-        # Menu: um radio ocupa bem menos espaco que sete botoes
+        # Menu: botoes (o DOM do Streamlit e previsivel, ao contrario do
+        # radio, cujo interno muda entre versoes). O CSS em app.py
+        # transforma os botoes em linhas de lista.
         paginas = {
             "📊 Painel": "Dashboard",
             "📥 Alunos": "Alunos",
@@ -273,31 +272,17 @@ def sidebar_navigation():
             "⚙️ Automação": "Automation",
             "⬇️ Atualizar": "Atualizar",
         }
-        rotulos = list(paginas)
+
         atual = st.session_state.get("current_page", "Dashboard")
-        indice = (
-            rotulos.index(next(r for r, k in paginas.items() if k == atual))
-            if atual in paginas.values() else 0
-        )
-
-        # Se a navegacao veio de um botao da pagina, o menu aceita.
-        # Sem isso, o radio devolve o valor antigo e manda o usuario
-        # de volta para onde ele estava.
-        navegou = st.session_state.pop("_menu_navegou", False)
-        if navegou:
-            st.session_state["nav_menu"] = rotulos[indice]
-
-        escolhida = st.radio(
-            "Menu",
-            options=rotulos,
-            index=indice,
-            label_visibility="collapsed",
-            key="nav_menu",
-        )
-
-        if not navegou and paginas[escolhida] != atual:
-            st.session_state.current_page = paginas[escolhida]
-            st.rerun()
+        for rotulo, destino in paginas.items():
+            if st.button(
+                rotulo,
+                key=f"menu_{destino}",
+                use_container_width=True,
+                type="primary" if destino == atual else "secondary",
+            ):
+                if destino != atual:
+                    ir_para(destino)
 
         st.divider()
 

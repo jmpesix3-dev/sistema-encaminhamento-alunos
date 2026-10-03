@@ -37,57 +37,57 @@ st.markdown("""
         display: none;
     }
 
-    /* Tira o espaco vazio do topo: o cabecalho do Streamlit (botao de
-       recolher) ocupa altura demais antes do conteudo do menu */
-    section[data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
-        padding-top: 0.35rem;
-        padding-bottom: 0;
-        height: auto;
+    /* ---------------- Menu lateral ---------------- */
+    /* Os botoes viram linhas de lista: sem borda, sem fundo, so o
+       texto. O item atual ganha cor e uma barra na esquerda. */
+    section[data-testid="stSidebar"] [data-testid="stButton"] {
+        margin-bottom: 1px;
     }
-    section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"],
-    section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
-        padding-top: 0.25rem;
+    section[data-testid="stSidebar"] [data-testid="stButton"] button {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        color: #d5dae3;
+        font-size: 13px;
+        font-weight: 450;
+        text-align: left;
+        padding: 5px 10px;
+        border-left: 3px solid transparent;
+        transition: background 0.12s ease, color 0.12s ease;
     }
-    section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div:first-child {
-        padding-top: 0;
+    section[data-testid="stSidebar"] [data-testid="stButton"] button:hover {
+        background: rgba(255, 255, 255, 0.07);
+        color: #ffffff;
+    }
+    section[data-testid="stSidebar"] [data-testid="stButton"] button:focus:not([kind="primary"]) {
+        background: rgba(255, 255, 255, 0.07);
+        color: #ffffff;
+        border-color: transparent;
+        box-shadow: none;
+    }
+    /* Item atual: o Streamlit marca botaos primary com kind="primary" */
+    section[data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"] {
+        background: transparent;
+        color: #ffffff;
+        font-weight: 600;
+        border-left: 3px solid #ff4b4b;
+    }
+    section[data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"]:hover {
+        background: rgba(255, 255, 255, 0.07);
+        color: #ffffff;
+    }
+    /* O cartao de pendencia fica com borda propria */
+    section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] {
+        padding: 4px;
+        margin-bottom: 6px;
     }
 
-    /* Menu lateral: lista compacta, sem bolinha de radio */
-    section[data-testid="stSidebar"] [data-testid="stRadio"] {
-        margin-bottom: 0;
-    }
-    section[data-testid="stSidebar"] [data-testid="stRadio"] label {
-        padding: 4px 8px;
-        border-radius: 6px;
-        margin-bottom: 1px;
-        cursor: pointer;
-        transition: background 0.12s ease;
-    }
-    section[data-testid="stSidebar"] [data-testid="stRadio"] label:hover {
-        background-color: #f5f6f8;
-    }
-    /* esconde a bolinha do radio */
-    section[data-testid="stSidebar"] [data-testid="stRadio"] [data-baseweb="radio"],
-    section[data-testid="stSidebar"] [data-testid="stRadio"] svg {
-        display: none !important;
-    }
-    section[data-testid="stSidebar"] [data-testid="stRadio"] [data-testid="stMarkdownContainer"] {
-        display: inline;
-    }
-    /* item ativo: so cor no texto */
-    section[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) {
-        background-color: transparent;
-    }
-    section[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) p {
-        color: #2563eb;
-        font-weight: 600;
-    }
-    /* espacamentos mais justos */
+    /* Espacos mais justos no menu */
     section[data-testid="stSidebar"] [data-testid="stHorizontalBlock"] {
-        margin-bottom: 0.3rem;
+        margin-bottom: 0.35rem;
     }
     section[data-testid="stSidebar"] hr {
-        margin: 0.5rem 0;
+        margin: 0.6rem 0;
     }
 </style>
 """, unsafe_allow_html=True)
