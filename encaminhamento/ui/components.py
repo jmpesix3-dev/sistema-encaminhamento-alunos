@@ -10,10 +10,15 @@ def ir_para(pagina: str, **estado):
 
     As chaves passadas em `estado` viram `ir_<chave>` no session_state,
     e a pagina de destino aplica e limpa.
+
+    Marca que a navegacao veio daqui, para o menu lateral nao voltar
+    para a pagina anterior: o widget de menu guarda o valor antigo e
+    sobrescreveria a escolha.
     """
     for chave, valor in estado.items():
         st.session_state[f"ir_{chave}"] = valor
     st.session_state.current_page = pagina
+    st.session_state["_menu_navegou"] = True
     st.rerun()
 
 
@@ -275,6 +280,13 @@ def sidebar_navigation():
             if atual in paginas.values() else 0
         )
 
+        # Se a navegacao veio de um botao da pagina, o menu aceita.
+        # Sem isso, o radio devolve o valor antigo e manda o usuario
+        # de volta para onde ele estava.
+        navegou = st.session_state.pop("_menu_navegou", False)
+        if navegou:
+            st.session_state["nav_menu"] = rotulos[indice]
+
         escolhida = st.radio(
             "Menu",
             options=rotulos,
@@ -283,7 +295,7 @@ def sidebar_navigation():
             key="nav_menu",
         )
 
-        if paginas[escolhida] != atual:
+        if not navegou and paginas[escolhida] != atual:
             st.session_state.current_page = paginas[escolhida]
             st.rerun()
 

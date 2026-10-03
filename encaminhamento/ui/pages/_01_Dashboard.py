@@ -43,32 +43,59 @@ def _passos():
 
 
 def _cartao_pendencia(p, destaque: bool):
-    """Cartao de pendencia: titulo, descricao, casos e botao de navegar."""
+    """
+    Cartao de pendencia: titulo, descricao, casos e botao de navegar.
+
+    Os casos so sao carregados depois do clique. O Streamlit executa o
+    conteudo do expansor mesmo fechado, e consultar os casos a cada
+    desenho da pagina deixava o painel lento.
+    """
     titulo = f"⚠️ {p.titulo} — {p.quantidade}" if destaque else f"{p.titulo} — {p.quantidade}"
     rotulo_botao = "Resolver →" if destaque else "Ver →"
 
     with st.expander(titulo, expanded=False):
         st.caption(p.descricao)
 
-        linhas = detalhar_pendencia(p.chave)
-        if not linhas:
-            st.caption("Sem casos para detalhar.")
-        else:
-            colunas = list(linhas[0].keys())
-            st.dataframe(
-                pd.DataFrame(linhas),
+        chave_casos = f"casos_{p.chave}"
+
+        if not st.session_state.get(chave_casos):
+            # So um botao agora: nada de consulta antes do usuario pedir
+            if st.button(
+                f"👁️ Ver {p.quantidade} caso(s)",
+                key=f"ver_{p.chave}",
                 use_container_width=True,
-                hide_index=True,
-                column_config={
-                    c: st.column_config.NumberColumn(c, format="%d")
-                    for c in colunas
-                    if c in ("Alunos", "Alunos apontam", "Procura",
-                             "Capacidade", "Excesso", "Vagas livres")
-                },
-            )
-            st.caption(f"{len(linhas)} caso(s).")
+            ):
+                st.session_state[chave_casos] = True
+                st.rerun()
+        else:
+            linhas = detalhar_pendencia(p.chave)
+            if not linhas:
+                st.caption("Sem casos para detalhar.")
+            else:
+                colunas = list(linhas[0].keys())
+                st.dataframe(
+                    pd.DataFrame(linhas),
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        c: st.column_config.NumberColumn(c, format="%d")
+                        for c in colunas
+                        if c in ("Alunos", "Alunos apontam", "Procura",
+                                 "Capacidade", "Excesso", "Vagas livres")
+                    },
+                )
+                st.caption(f"{len(linhas)} caso(s).")
+
+            if st.button(
+                "Ocultar casos",
+                key=f"ocultar_{p.chave}",
+                use_container_width=True,
+            ):
+                st.session_state.pop(chave_casos, None)
+                st.rerun()
 
         if p.pagina:
+            st.divider()
             if st.button(rotulo_botao, key=f"ir_{p.chave}", use_container_width=True):
                 ir_para(p.pagina, **p.estado)
 
@@ -84,13 +111,14 @@ def _pendencias(resumo):
         )
         return
 
-    # Destaque para as pendencias que travam o processo
+    # Destaque para as pendencias mais criticas. O aviso de atualizacao
+    # usa criticidade 0 e por isso nao pode ser testado com "== 1".
     for p in resumo.pendencias:
-        if p.criticidade == 1:
+        if p.criticidade <= 1:
             _cartao_pendencia(p, destaque=True)
 
     # Demais, em duas colunas alinhadas pela base
-    demais = [p for p in resumo.pendencias if p.criticidade != 1]
+    demais = [p for p in resumo.pendencias if p.criticidade > 1]
     if demais:
         st.caption("Outras pendências")
         # Garante que sempre sobrem posicoes vazias para manter pares
