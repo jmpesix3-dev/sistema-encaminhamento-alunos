@@ -230,7 +230,7 @@ def sidebar_navigation():
                   font-weight: 650;
                   color: #262730;
                   line-height: 1.25;">
-                Encaminhamento de Alunos
+                Encaminhamento Escolar de Alunos
               </div>
             </div>
             """,

@@ -1,4 +1,4 @@
-# Sistema de Encaminhamento de Alunos
+# Encaminhamento Escolar de Alunos
 
 Sistema web para gerenciar o encaminhamento de alunos entre escolas, em
 substituição às planilhas manuais.

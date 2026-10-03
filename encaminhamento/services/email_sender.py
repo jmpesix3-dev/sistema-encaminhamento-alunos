@@ -152,10 +152,12 @@ def send_batch_notification(
         class_name = batch.origin_class.name if batch.origin_class else ""
         student_count = batch.student_count
     
-    subject = f"Encaminhamento de Alunos - {destination_school.name} - {student_count} alunos"
-    
+    from encaminhamento.config import NOME_SISTEMA
+
+    subject = f"{NOME_SISTEMA} - {destination_school.name} - {student_count} alunos"
+
     body_text = f"""
-Encaminhamento de Alunos para o Ano Letivo 2025
+{NOME_SISTEMA}
 
 Unidade Escolar de Destino: {destination_school.name}
 Unidade Escolar de Origem: {origin_school.name}
@@ -165,13 +167,13 @@ Número de Alunos: {student_count}
 {custom_message or 'Segue em anexo o quadro de encaminhamento dos alunos.'}
 
 Atenciosamente,
-Sistema de Encaminhamento de Alunos
+{NOME_SISTEMA}
 """
-    
+
     body_html = f"""
 <html>
 <body>
-<h2>Encaminhamento de Alunos - Ano Letivo 2025</h2>
+<h2>{NOME_SISTEMA}</h2>
 <table>
 <tr><td><b>Unidade Escolar de Destino:</b></td><td>{destination_school.name}</td></tr>
 <tr><td><b>Unidade Escolar de Origem:</b></td><td>{origin_school.name}</td></tr>
@@ -180,7 +182,7 @@ Sistema de Encaminhamento de Alunos
 </table>
 <p>{custom_message or 'Segue em anexo o quadro de encaminhamento dos alunos.'}</p>
 <hr>
-<p><small>Sistema de Encaminhamento de Alunos</small></p>
+<p><small>{NOME_SISTEMA}</small></p>
 </body>
 </html>
 """

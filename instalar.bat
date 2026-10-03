@@ -1,6 +1,6 @@
 @echo off
 REM ===========================================================================
-REM  Instalador - Sistema de Encaminhamento de Alunos (Windows)
+REM  Instalador - Encaminhamento Escolar de Alunos (Windows)
 REM
 REM  Este script instala o Python se faltar, cria o ambiente virtual,
 REM  instala as dependencias e sobe o sistema.

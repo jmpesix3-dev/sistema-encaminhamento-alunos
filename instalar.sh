@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ===========================================================================
-#  Instalador - Sistema de Encaminhamento de Alunos (macOS e Linux)
+#  Instalador - Encaminhamento Escolar de Alunos (macOS e Linux)
 #
 #  Este script cria o ambiente virtual, instala as dependencias e
 #  sobe o sistema.

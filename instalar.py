@@ -1,5 +1,5 @@
 """
-Instalador do Sistema de Encaminhamento de Alunos.
+Instalador do Encaminhamento Escolar de Alunos.
 
 Roda em Windows, macOS e Linux. Cria o ambiente virtual, instala as
 dependencias e deixa o sistema pronto para uso.
@@ -19,6 +19,9 @@ from pathlib import Path
 RAIZ = Path(__file__).parent
 VENV = RAIZ / "venv"
 REQUISITOS = RAIZ / "requirements.txt"
+
+# Nome do sistema, sem depender do pacote estar instalado ainda
+NOME_SISTEMA = "Encaminhamento Escolar de Alunos"
 
 VERSAO_MINIMA = (3, 10)
 
@@ -195,7 +198,7 @@ def main():
     args = analisador.parse_args()
 
     print()
-    print(cor("Instalador - Sistema de Encaminhamento de Alunos", 36))
+    print(cor(f"Instalador - {NOME_SISTEMA}", 36))
     print(cor("=" * 58, 36))
     print()
     info(f"Sistema  : {platform.system()} {platform.machine()}")

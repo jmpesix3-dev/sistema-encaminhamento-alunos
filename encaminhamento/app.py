@@ -37,6 +37,21 @@ st.markdown("""
         display: none;
     }
 
+    /* Tira o espaco vazio do topo: o cabecalho do Streamlit (botao de
+       recolher) ocupa altura demais antes do conteudo do menu */
+    section[data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
+        padding-top: 0.35rem;
+        padding-bottom: 0;
+        height: auto;
+    }
+    section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"],
+    section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+        padding-top: 0.25rem;
+    }
+    section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div:first-child {
+        padding-top: 0;
+    }
+
     /* Menu lateral: lista compacta, sem bolinha de radio */
     section[data-testid="stSidebar"] [data-testid="stRadio"] {
         margin-bottom: 0;

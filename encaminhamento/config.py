@@ -26,7 +26,10 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
 EMAIL_FROM = os.getenv("EMAIL_FROM", SMTP_USER)
 
-APP_TITLE = "Sistema de Encaminhamento de Alunos"
+# Nome do sistema. Fica aqui para nao ter o texto espalhado em
+# varios arquivos: mudar o nome e mudar so esta linha.
+NOME_SISTEMA = "Encaminhamento Escolar de Alunos"
+APP_TITLE = NOME_SISTEMA
 APP_ICON = "📋"
 PAGE_LAYOUT = "wide"
 
