@@ -36,6 +36,29 @@ st.markdown("""
     div[data-testid="stSidebarNav"] {
         display: none;
     }
+
+    /* Menu lateral: linhas compactas, sem a bolinha do radio */
+    section[data-testid="stSidebar"] [data-testid="stRadio"] label {
+        padding: 3px 6px;
+        border-radius: 6px;
+        margin-bottom: 1px;
+        transition: background 0.12s ease;
+    }
+    section[data-testid="stSidebar"] [data-testid="stRadio"] label:hover {
+        background-color: #f1f3f7;
+    }
+    section[data-testid="stSidebar"] [data-testid="stRadio"] label > div:first-child {
+        display: none;
+    }
+    section[data-testid="stSidebar"] [data-testid="stRadio"] {
+        margin-bottom: 0;
+    }
+    section[data-testid="stSidebar"] [data-testid="stHorizontalBlock"] {
+        margin-bottom: 0.35rem;
+    }
+    section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+        margin-bottom: 0.3rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 

@@ -217,17 +217,31 @@ def metric_card(title: str, value: str, delta: str = None, help_text: str = None
 
 
 def sidebar_navigation():
-    """Render sidebar navigation."""
+    """Menu lateral compacto: cabe inteiro sem rolagem."""
+    # Garante que a pagina atual exista, mesmo se o app nao inicializou
+    if "current_page" not in st.session_state:
+        st.session_state["current_page"] = "Dashboard"
+
     with st.sidebar:
-        st.title("📋 Encaminhamento")
-        st.caption("Sistema de Encaminhamento de Alunos")
+        # Cabecalho enxuto, sem o titulo grande
+        st.markdown(
+            """
+            <div style="padding: 2px 0 6px 0;">
+              <div style="font-size: 15px; font-weight: 600; color: #262730;">
+                📋 Encaminhamento
+              </div>
+              <div style="font-size: 11px; color: #8a94a6;">Alunos</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
         # Aviso de pendencias, para quem nao abre o painel saber que ha algo a resolver
         try:
             from encaminhamento.services.relatorio import montar_resumo
             n_pendencias = montar_resumo().total_pendencias
         except Exception:
-            n_pendencias = None
+            n_pendencias = 0
 
         if n_pendencias:
             if st.button(
@@ -238,54 +252,63 @@ def sidebar_navigation():
             ):
                 st.session_state.current_page = "Dashboard"
                 st.rerun()
-        else:
-            st.success("Sem pendências", icon="✅")
 
-        pages = {
+        # Menu: um radio ocupa bem menos espaco que sete botoes
+        paginas = {
             "📊 Painel": "Dashboard",
             "📥 Alunos": "Alunos",
             "🏫 Escolas": "Escolas",
-            "🎯 Alocação Automática": "Auto_Allocation",
-            "📦 Gestão de Lotes": "Batch_Management",
+            "🎯 Alocação": "Auto_Allocation",
+            "📦 Lotes": "Batch_Management",
             "⚙️ Automação": "Automation",
             "⬇️ Atualizar": "Atualizar",
         }
+        rotulos = list(paginas)
+        atual = st.session_state.get("current_page", "Dashboard")
+        indice = rotulos.index(
+            next(r for r, k in paginas.items() if k == atual)
+        ) if atual in paginas.values() else 0
 
-        for label, key in pages.items():
-            if st.button(label, use_container_width=True, key=f"nav_{key}"):
-                st.session_state.current_page = key
-                st.rerun()
+        escolhida = st.radio(
+            "Menu",
+            options=rotulos,
+            index=indice,
+            label_visibility="collapsed",
+            key="nav_menu",
+        )
+
+        if paginas[escolhida] != atual:
+            st.session_state.current_page = paginas[escolhida]
+            st.rerun()
 
         st.divider()
 
-        st.caption("Totais do sistema")
+        # Totais em uma linha so
         try:
             with get_session() as session:
-                from sqlalchemy import select, func
+                from sqlalchemy import func, select
                 from encaminhamento.database.models import School, Student, ForwardingBatch
 
-                school_count = session.execute(select(func.count(School.id))).scalar() or 0
-                student_count = session.execute(select(func.count(Student.id))).scalar() or 0
-                batch_count = session.execute(select(func.count(ForwardingBatch.id))).scalar() or 0
+                escolas = session.execute(select(func.count(School.id))).scalar() or 0
+                alunos = session.execute(select(func.count(Student.id))).scalar() or 0
+                lotes = session.execute(select(func.count(ForwardingBatch.id))).scalar() or 0
 
-                st.caption(f"🏫 {school_count} escolas")
-                st.caption(f"👥 {student_count} alunos")
-                st.caption(f"📦 {batch_count} lotes")
+            st.caption(f"🏫 {escolas}  ·  👥 {alunos}  ·  📦 {lotes}")
         except Exception:
-            st.caption("📊 Carregando...")
+            st.caption("Carregando...")
 
         # Assinatura, sempre visivel no rodape do menu
         st.markdown(
             """
             <div style="
-                margin-top: 22px;
-                padding-top: 10px;
+                margin-top: 14px;
+                padding-top: 8px;
                 border-top: 1px solid #e6e9ef;
                 text-align: center;">
-              <div style="font-size: 11px; color: #98a2b3; letter-spacing: 0.2px;">
+              <div style="font-size: 10px; color: #a4adbd; letter-spacing: 0.2px;">
                 Desenvolvido por
               </div>
-              <div style="font-size: 12px; color: #6b7684; font-weight: 600; margin-top: 1px;">
+              <div style="font-size: 11px; color: #7b8696; font-weight: 600; margin-top: 1px;">
                 C3 Sistemas e Serviços
               </div>
             </div>
