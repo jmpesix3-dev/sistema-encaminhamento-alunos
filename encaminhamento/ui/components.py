@@ -1,6 +1,5 @@
 import streamlit as st
 from typing import Optional
-from encaminhamento.database.models import School
 from encaminhamento.database.crud import list_schools, search_schools
 from encaminhamento.database import get_session
 
@@ -238,13 +237,11 @@ def sidebar_navigation():
             unsafe_allow_html=True,
         )
 
-        # Resumo, usado no aviso e nos totais
+        # Pendencias, so para montar o aviso de quantidade
         try:
             from encaminhamento.services.relatorio import montar_resumo
-            resumo = montar_resumo()
-            pendencias = resumo.pendencias
+            pendencias = montar_resumo().pendencias
         except Exception:
-            resumo = None
             pendencias = []
 
         n_tipos = len(pendencias)
@@ -291,66 +288,6 @@ def sidebar_navigation():
             st.rerun()
 
         st.divider()
-
-        # Totais
-        escolas = alunos = lotes = 0
-        if resumo is not None:
-            escolas, alunos, lotes = resumo.escolas, resumo.alunos, resumo.lotes
-
-        # Adaptativo: pendencia relevante aparece; sem pendencia, so totais
-        if n_tipos:
-            icones = {
-                "escolas_sem_capacidade": "🏫",
-                "escolas_sem_geo": "📍",
-                "alunos_sem_coordenada": "📍",
-                "alunos_sem_vaga": "👥",
-                "alunos_sem_segunda": "1️⃣",
-                "lotes_sem_pdf": "📄",
-                "lotes_nao_enviados": "📨",
-                "escolas_sobrecarregadas": "📈",
-                "escolas_ociosas": "💤",
-                "atualizacao": "⬆️",
-            }
-            destaque = sorted(
-                pendencias, key=lambda p: (p.criticidade, -p.quantidade)
-            )[:3]
-
-            linhas = "".join(
-                f"""
-                <div style="
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    padding: 3px 0;
-                    font-size: 12px;">
-                  <span style="color:#5a6472;">
-                    {icones.get(p.chave, "•")} {p.titulo}
-                  </span>
-                  <span style="color:#98a2b3; font-weight:600;">{p.quantidade}</span>
-                </div>
-                """
-                for p in destaque
-            )
-
-            st.markdown(
-                f'<div style="padding: 1px 0 5px 0;">{linhas}</div>',
-                unsafe_allow_html=True,
-            )
-
-        st.markdown(
-            f"""
-            <div style="
-                display: flex;
-                justify-content: space-between;
-                font-size: 11px;
-                color: #8a94a6;">
-              <span>🏫 {escolas}</span>
-              <span>👥 {alunos}</span>
-              <span>📦 {lotes}</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
 
         # Assinatura
         st.markdown(
