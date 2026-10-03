@@ -218,36 +218,44 @@ def metric_card(title: str, value: str, delta: str = None, help_text: str = None
 
 def sidebar_navigation():
     """Menu lateral compacto: cabe inteiro sem rolagem."""
-    # Garante que a pagina atual exista, mesmo se o app nao inicializou
     if "current_page" not in st.session_state:
         st.session_state["current_page"] = "Dashboard"
 
     with st.sidebar:
-        # Cabecalho enxuto, sem o titulo grande
+        # Cabecalho com o nome completo
         st.markdown(
             """
-            <div style="padding: 2px 0 6px 0;">
-              <div style="font-size: 15px; font-weight: 600; color: #262730;">
-                📋 Encaminhamento
+            <div style="padding: 2px 0 8px 0;">
+              <div style="
+                  font-size: 14px;
+                  font-weight: 650;
+                  color: #262730;
+                  line-height: 1.25;">
+                Encaminhamento de Alunos
               </div>
-              <div style="font-size: 11px; color: #8a94a6;">Alunos</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        # Aviso de pendencias, para quem nao abre o painel saber que ha algo a resolver
+        # Resumo, usado no aviso e nos totais
         try:
             from encaminhamento.services.relatorio import montar_resumo
-            n_pendencias = montar_resumo().total_pendencias
+            resumo = montar_resumo()
+            pendencias = resumo.pendencias
         except Exception:
-            n_pendencias = 0
+            resumo = None
+            pendencias = []
 
-        if n_pendencias:
+        n_tipos = len(pendencias)
+        afetados = sum(p.quantidade for p in pendencias)
+
+        # Mostra quantos TIPOS de pendencia, e quantos itens afetam
+        if n_tipos:
             if st.button(
-                f"⚠️ {n_pendencias} pendência(s)",
+                f"⚠️ {n_tipos} pendência{'s' if n_tipos > 1 else ''}"
+                f" · {afetados} itens",
                 use_container_width=True,
-                type="primary",
                 key="nav_pendencias",
             ):
                 st.session_state.current_page = "Dashboard"
@@ -265,9 +273,10 @@ def sidebar_navigation():
         }
         rotulos = list(paginas)
         atual = st.session_state.get("current_page", "Dashboard")
-        indice = rotulos.index(
-            next(r for r, k in paginas.items() if k == atual)
-        ) if atual in paginas.values() else 0
+        indice = (
+            rotulos.index(next(r for r, k in paginas.items() if k == atual))
+            if atual in paginas.values() else 0
+        )
 
         escolhida = st.radio(
             "Menu",
@@ -283,32 +292,76 @@ def sidebar_navigation():
 
         st.divider()
 
-        # Totais em uma linha so
-        try:
-            with get_session() as session:
-                from sqlalchemy import func, select
-                from encaminhamento.database.models import School, Student, ForwardingBatch
+        # Totais
+        escolas = alunos = lotes = 0
+        if resumo is not None:
+            escolas, alunos, lotes = resumo.escolas, resumo.alunos, resumo.lotes
 
-                escolas = session.execute(select(func.count(School.id))).scalar() or 0
-                alunos = session.execute(select(func.count(Student.id))).scalar() or 0
-                lotes = session.execute(select(func.count(ForwardingBatch.id))).scalar() or 0
+        # Adaptativo: pendencia relevante aparece; sem pendencia, so totais
+        if n_tipos:
+            icones = {
+                "escolas_sem_capacidade": "🏫",
+                "escolas_sem_geo": "📍",
+                "alunos_sem_coordenada": "📍",
+                "alunos_sem_vaga": "👥",
+                "alunos_sem_segunda": "1️⃣",
+                "lotes_sem_pdf": "📄",
+                "lotes_nao_enviados": "📨",
+                "escolas_sobrecarregadas": "📈",
+                "escolas_ociosas": "💤",
+                "atualizacao": "⬆️",
+            }
+            destaque = sorted(
+                pendencias, key=lambda p: (p.criticidade, -p.quantidade)
+            )[:3]
 
-            st.caption(f"🏫 {escolas}  ·  👥 {alunos}  ·  📦 {lotes}")
-        except Exception:
-            st.caption("Carregando...")
+            linhas = "".join(
+                f"""
+                <div style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 3px 0;
+                    font-size: 12px;">
+                  <span style="color:#5a6472;">
+                    {icones.get(p.chave, "•")} {p.titulo}
+                  </span>
+                  <span style="color:#98a2b3; font-weight:600;">{p.quantidade}</span>
+                </div>
+                """
+                for p in destaque
+            )
 
-        # Assinatura, sempre visivel no rodape do menu
+            st.markdown(
+                f'<div style="padding: 1px 0 5px 0;">{linhas}</div>',
+                unsafe_allow_html=True,
+            )
+
+        st.markdown(
+            f"""
+            <div style="
+                display: flex;
+                justify-content: space-between;
+                font-size: 11px;
+                color: #8a94a6;">
+              <span>🏫 {escolas}</span>
+              <span>👥 {alunos}</span>
+              <span>📦 {lotes}</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # Assinatura
         st.markdown(
             """
             <div style="
                 margin-top: 14px;
-                padding-top: 8px;
-                border-top: 1px solid #e6e9ef;
+                padding-top: 9px;
+                border-top: 1px solid #eceff4;
                 text-align: center;">
-              <div style="font-size: 10px; color: #a4adbd; letter-spacing: 0.2px;">
-                Desenvolvido por
-              </div>
-              <div style="font-size: 11px; color: #7b8696; font-weight: 600; margin-top: 1px;">
+              <div style="font-size: 10px; color: #a8b0bd;">Desenvolvido por</div>
+              <div style="font-size: 11px; color: #7d8797; font-weight: 600; margin-top: 1px;">
                 C3 Sistemas e Serviços
               </div>
             </div>
