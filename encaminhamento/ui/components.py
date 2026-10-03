@@ -274,6 +274,25 @@ def sidebar_navigation():
         except Exception:
             st.caption("📊 Carregando...")
 
+        # Assinatura, sempre visivel no rodape do menu
+        st.markdown(
+            """
+            <div style="
+                margin-top: 22px;
+                padding-top: 10px;
+                border-top: 1px solid #e6e9ef;
+                text-align: center;">
+              <div style="font-size: 11px; color: #98a2b3; letter-spacing: 0.2px;">
+                Desenvolvido por
+              </div>
+              <div style="font-size: 12px; color: #6b7684; font-weight: 600; margin-top: 1px;">
+                C3 Sistemas e Serviços
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
 
 def confirm_dialog(message: str, key: str) -> bool:
     """Simple confirmation dialog."""
