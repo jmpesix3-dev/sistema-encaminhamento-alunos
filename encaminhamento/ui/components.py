@@ -221,15 +221,16 @@ def sidebar_navigation():
         st.session_state["current_page"] = "Dashboard"
 
     with st.sidebar:
-        # Cabecalho com o nome completo
+        # Cabecalho com o nome completo.
+        # Sem cor fixa: o texto herda a cor do tema, e por isso
+        # continua legivel tanto no claro quanto no escuro.
         st.markdown(
             """
-            <div style="padding: 2px 0 8px 0;">
+            <div style="padding: 0 0 10px 0;">
               <div style="
                   font-size: 14px;
                   font-weight: 650;
-                  color: #262730;
-                  line-height: 1.25;">
+                  line-height: 1.3;">
                 Encaminhamento Escolar de Alunos
               </div>
             </div>

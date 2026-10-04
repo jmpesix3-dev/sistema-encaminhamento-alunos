@@ -38,56 +38,80 @@ st.markdown("""
     }
 
     /* ---------------- Menu lateral ---------------- */
-    /* Os botoes viram linhas de lista: sem borda, sem fundo, so o
-       texto. O item atual ganha cor e uma barra na esquerda. */
+    /* Botoes viram linhas de lista: sem borda, sem fundo, altura curta,
+       texto a esquerda. O item atual ganha uma barra na esquerda. */
     section[data-testid="stSidebar"] [data-testid="stButton"] {
-        margin-bottom: 1px;
+        margin-bottom: 0;
     }
     section[data-testid="stSidebar"] [data-testid="stButton"] button {
-        background: transparent;
-        border: none;
-        box-shadow: none;
-        color: #d5dae3;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        min-height: unset;
+        height: auto;
+        padding: 4px 8px;
         font-size: 13px;
         font-weight: 450;
-        text-align: left;
-        padding: 5px 10px;
         border-left: 3px solid transparent;
-        transition: background 0.12s ease, color 0.12s ease;
+        transition: background 0.12s ease;
+    }
+    /* o texto do botao do Streamlit vem dentro de um flexbox centralizado */
+    section[data-testid="stSidebar"] [data-testid="stButton"] button > div {
+        justify-content: flex-start !important;
+        width: 100%;
+    }
+    section[data-testid="stSidebar"] [data-testid="stButton"] button p {
+        text-align: left;
     }
     section[data-testid="stSidebar"] [data-testid="stButton"] button:hover {
-        background: rgba(255, 255, 255, 0.07);
-        color: #ffffff;
+        background: rgba(127, 127, 127, 0.14) !important;
+        border-color: transparent !important;
+        box-shadow: none !important;
     }
-    section[data-testid="stSidebar"] [data-testid="stButton"] button:focus:not([kind="primary"]) {
-        background: rgba(255, 255, 255, 0.07);
-        color: #ffffff;
-        border-color: transparent;
-        box-shadow: none;
+    section[data-testid="stSidebar"] [data-testid="stButton"] button:active,
+    section[data-testid="stSidebar"] [data-testid="stButton"] button:focus,
+    section[data-testid="stSidebar"] [data-testid="stButton"] button:focus-visible {
+        background: transparent !important;
+        border-color: transparent !important;
+        box-shadow: none !important;
+        outline: none !important;
     }
-    /* Item atual: o Streamlit marca botaos primary com kind="primary" */
+    /* item atual: Streamlit marca botaes primary com kind="primary" */
     section[data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"] {
-        background: transparent;
-        color: #ffffff;
-        font-weight: 600;
+        background: transparent !important;
         border-left: 3px solid #ff4b4b;
+        font-weight: 600;
     }
     section[data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"]:hover {
-        background: rgba(255, 255, 255, 0.07);
-        color: #ffffff;
-    }
-    /* O cartao de pendencia fica com borda propria */
-    section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] {
-        padding: 4px;
-        margin-bottom: 6px;
+        background: rgba(127, 127, 127, 0.14) !important;
     }
 
-    /* Espacos mais justos no menu */
+    /* Cartao de pendencias com borda propria, separado dos itens do menu */
+    section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] {
+        padding: 4px;
+        margin-bottom: 8px;
+    }
+    section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"]
+        [data-testid="stButton"] button {
+        font-size: 12.5px;
+        font-weight: 500;
+        padding: 6px 8px;
+    }
+
+    /* Espacos mais justos */
     section[data-testid="stSidebar"] [data-testid="stHorizontalBlock"] {
         margin-bottom: 0.35rem;
     }
     section[data-testid="stSidebar"] hr {
-        margin: 0.6rem 0;
+        margin: 0.7rem 0;
+    }
+
+    /* O cabecalho do Streamlit (botao de recolher) ocupa altura
+       demais antes do conteudo do menu. Reduz sem esconder. */
+    section[data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
+        padding-top: 0.2rem;
+        padding-bottom: 0;
+        height: auto;
     }
 </style>
 """, unsafe_allow_html=True)
