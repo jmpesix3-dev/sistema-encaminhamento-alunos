@@ -11,6 +11,7 @@ from encaminhamento.database.models import Student, School
 from encaminhamento.database.crud import get_students_for_batch
 from encaminhamento.database import get_session
 from encaminhamento.config import PDF_EXPORT_DIR
+from encaminhamento.utils.arquivos import nome_seguro
 
 
 def generate_batch_pdf(batch_id: int, output_path: str = None) -> str:
@@ -184,7 +185,10 @@ def generate_student_list_pdf(students: List[Student], destination_school: Schoo
                                output_path: str = None) -> str:
     """Generate PDF for a custom student list."""
     if output_path is None:
-        output_path = PDF_EXPORT_DIR / f"encaminhamento_{destination_school.name}_{len(students)}alunos.pdf"
+        output_path = PDF_EXPORT_DIR / (
+            f"encaminhamento_{nome_seguro(destination_school.name, 'escola')}"
+            f"_{len(students)}alunos.pdf"
+        )
     
     doc = SimpleDocTemplate(
         str(output_path),

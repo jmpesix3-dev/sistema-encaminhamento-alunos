@@ -14,6 +14,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from encaminhamento.config import EXCEL_EXPORT_DIR
 from encaminhamento.database.models import School, Student
+from encaminhamento.utils.arquivos import nome_seguro
 
 ANO_PADRAO = 2025
 
@@ -93,7 +94,10 @@ def export_students_to_excel(
 
     if output_path is None:
         output_path = (
-            EXCEL_EXPORT_DIR / f"encaminhamento_{destination_school.name}_{total}alunos.xlsx"
+            EXCEL_EXPORT_DIR / (
+            f"encaminhamento_{nome_seguro(destination_school.name, 'escola')}"
+            f"_{total}alunos.xlsx"
+        )
         )
 
     wb.save(output_path)

@@ -115,13 +115,19 @@ class AllocationService:
             ))
 
             if not self.preview:
-                update_student(
-                    session,
-                    aluno.id,
-                    allocated_school_id=school.id,
-                    allocation_status="allocated",
-                    allocation_priority=i + 1,
-                )
+                # Além da escola, move o aluno de Rascunho para Pendente.
+                # O painel mostra o fluxo por status, e sem isso os 60
+                # alocados continuariam aparecendo como Rascunho, dando
+                # a impressao de que a alocacao nao fez nada.
+                campos = {
+                    "allocated_school_id": school.id,
+                    "allocation_status": "allocated",
+                    "allocation_priority": i + 1,
+                }
+                if aluno.status == StudentStatus.DRAFT:
+                    campos["status"] = StudentStatus.PENDING
+
+                update_student(session, aluno.id, **campos)
 
         return alocados, excedente
     
@@ -157,7 +163,13 @@ class AllocationService:
                         by_school={}, results=[],
                     )
 
-                alunos = list_students(session, status=StudentStatus.DRAFT, limit=5000)
+                # Só entram os que ainda NAO tem escola definida. Filtrar por
+                # status=rascunho deixaria de fora quem ja foi alocado,
+                # e a previa passaria a mostrar so os poucos restantes.
+                todos = list_students(session, limit=5000)
+                alunos = [a for a in todos if a.allocated_school_id is None]
+                # ja alocados antes desta execucao (contagem, nao o conjunto)
+                ja_alocados_antes = len(todos) - len(alunos)
                 escola_por_id = {s.id: s for s in dest_schools}
 
                 # Separa por preferencia
@@ -171,6 +183,25 @@ class AllocationService:
 
                 ja_alocados = set()
 
+                # Quem ja estava alocado antes entra na relacao de vagas,
+                # senao a tabela mostraria so os alocados desta rodada.
+                for aluno in todos:
+                    if aluno.allocated_school_id is None:
+                        continue
+                    ja_alocados.add(aluno.id)
+                    escola = escola_por_id.get(aluno.allocated_school_id)
+                    nome = escola.name if escola else "(escola fora da lista)"
+                    info = by_school[aluno.allocated_school_id]
+                    info["capacity"] = escola.oferta if escola else 0
+                    info["school_name"] = nome
+                    info["allocated"] += 1
+                    info["students"].append({
+                        "student_id": aluno.id,
+                        "name": aluno.name,
+                        "distance_km": None,
+                        "choice": "anterior",
+                    })
+
                 # ---- 1a opcao: os mais perto ate lotar a escola ----
                 for escola in dest_schools:
                     candidatos = [
@@ -180,10 +211,28 @@ class AllocationService:
                     if not candidatos:
                         continue
 
+                    # Vagas que ainda restam. Sem descontar as ja usadas,
+                    # a fase 1 alocaria de novo ate a capacidade cheia e a
+                    # escola passaria do limite.
+                    vagas = (escola.oferta or 0) - by_school[escola.id]['allocated']
+                    if vagas <= 0:
+                        # Escola lotada: todos vao para a 2a opcao
+                        for aluno in candidatos:
+                            if aluno.destination_school_2_id:
+                                por_segunda[aluno.destination_school_2_id].append(aluno)
+                            else:
+                                all_no_address.append(aluno)
+                        continue
+
                     by_school[escola.id]['capacity'] = escola.oferta
                     by_school[escola.id]['school_name'] = escola.name
 
-                    alocados, excedente = self._allocate_for_school(escola, candidatos, session)
+                    capacidade_original = escola.oferta
+                    escola.oferta = vagas
+                    alocados, excedente = self._allocate_for_school(
+                        escola, candidatos, session
+                    )
+                    escola.oferta = capacidade_original
 
                     for r in alocados:
                         all_allocated.append(r)
@@ -285,7 +334,10 @@ class AllocationService:
             self.preview = False
 
         # Monta o resumo
-        total = len(all_allocated) + len(all_no_address)
+        # O total inclui quem ja estava alocado antes: assim a previa
+        # mostra o quadro completo, e nao so os que faltavam.
+        total = len(all_allocated) + len(all_no_address) + ja_alocados_antes
+        alocados_total = len(all_allocated) + ja_alocados_antes
 
         resultados_sem_vaga = [
             AllocationResult(
@@ -303,7 +355,7 @@ class AllocationService:
 
         return AllocationSummary(
             total_students=total,
-            allocated=len(all_allocated),
+            allocated=alocados_total,
             waitlist=0,
             no_address=len(all_no_address),
             no_capacity=0,
@@ -312,19 +364,28 @@ class AllocationService:
         )
     
     def reset_allocations(self) -> int:
-        """Reset all student allocations to pending status."""
+        """
+        Desfaz a alocacao.
+
+        limpa a escola definida e devolve os alunos para Rascunho,
+        desde que nao tenham avancado no fluxo (enviado ou confirmado).
+        """
         with get_session() as session:
             from sqlalchemy import update
             from encaminhamento.database.models import Student
-            stmt = update(Student).where(
-                Student.allocation_status.in_(["allocated", "waitlist"])
-            ).values(
-                allocated_school_id=None,
-                allocation_status="pending",
-                allocation_priority=None
+
+            resultado = session.execute(
+                update(Student)
+                .where(Student.allocation_status.in_(["allocated", "waitlist"]))
+                .values(
+                    allocated_school_id=None,
+                    allocation_status="pending",
+                    allocation_priority=None,
+                    # so volta a rascunho quem ainda nao foi enviado
+                    status=StudentStatus.DRAFT,
+                )
             )
-            result = session.execute(stmt)
-            return result.rowcount
+            return resultado.rowcount
     
     def get_allocation_stats(self) -> Dict:
         """Get current allocation statistics."""
