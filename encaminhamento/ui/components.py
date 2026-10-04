@@ -221,34 +221,26 @@ def sidebar_navigation():
         st.session_state["current_page"] = "Dashboard"
 
     with st.sidebar:
-        # Cabecalho: icone de cap Students ao lado do nome.
+        # Cabecalho: cap grande centralizado sobre o nome.
         # Sem cor fixa em lugar nenhum: o texto herda a cor do tema
         # e continua legivel no claro e no escuro.
         st.markdown(
             """
             <div style="
-                display: flex;
-                align-items: center;
-                gap: 9px;
-                padding: 2px 2px 12px 2px;
+                text-align: center;
+                padding: 4px 2px 12px 2px;
                 border-bottom: 1px solid rgba(127, 127, 127, 0.25);
                 margin-bottom: 10px;">
-              <span style="font-size: 21px; line-height: 1;">🎓</span>
-              <div>
-                <div style="
-                    font-size: 13.5px;
-                    font-weight: 700;
-                    letter-spacing: -0.1px;
-                    line-height: 1.2;">
-                  Encaminhamento Escolar
-                </div>
-                <div style="
-                    font-size: 11.5px;
-                    opacity: 0.7;
-                    line-height: 1.2;
-                    margin-top: 1px;">
-                  de Alunos
-                </div>
+              <div style="
+                  font-size: 34px;
+                  line-height: 1;
+                  margin-bottom: 4px;">🎓</div>
+              <div style="
+                  font-size: 13.5px;
+                  font-weight: 700;
+                  letter-spacing: -0.1px;
+                  line-height: 1.25;">
+                Encaminhamento Escolar de Alunos
               </div>
             </div>
             """,
