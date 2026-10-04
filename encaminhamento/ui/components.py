@@ -261,9 +261,9 @@ def sidebar_navigation():
                     st.session_state.current_page = "Dashboard"
                     st.rerun()
 
-        # Menu: botoes (o DOM do Streamlit e previsivel, ao contrario do
-        # radio, cujo interno muda entre versoes). O CSS em app.py
-        # transforma os botoes em linhas de lista.
+        # Menu: o item atual e desenhado como texto (nao precisa ser
+        # clicavel), e os demais como botoes. Assim o CSS consegue
+        # controlar a aparencia de cada um.
         paginas = {
             "📊 Painel": "Dashboard",
             "📥 Alunos": "Alunos",
@@ -275,14 +275,32 @@ def sidebar_navigation():
         }
 
         atual = st.session_state.get("current_page", "Dashboard")
+
         for rotulo, destino in paginas.items():
-            if st.button(
-                rotulo,
-                key=f"menu_{destino}",
-                use_container_width=True,
-                type="primary" if destino == atual else "secondary",
-            ):
-                if destino != atual:
+            if destino == atual:
+                # Item atual: sem cor fixa, herda a cor do tema
+                st.markdown(
+                    f"""
+                    <div style="
+                        border-left: 3px solid #ff4b4b;
+                        background: rgba(127, 127, 127, 0.14);
+                        padding: 5px 8px;
+                        border-radius: 4px;
+                        font-size: 13px;
+                        font-weight: 650;
+                        line-height: 1.4;
+                        margin-bottom: 1px;">
+                      {rotulo}
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            else:
+                if st.button(
+                    rotulo,
+                    key=f"menu_{destino}",
+                    use_container_width=True,
+                ):
                     ir_para(destino)
 
         st.divider()

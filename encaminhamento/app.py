@@ -37,65 +37,57 @@ st.markdown("""
         display: none;
     }
 
-    /* ---------------- Menu lateral ---------------- */
-    /* Botoes viram linhas de lista: sem borda, sem fundo, altura curta,
-       texto a esquerda. O item atual ganha uma barra na esquerda. */
-    section[data-testid="stSidebar"] [data-testid="stButton"] {
+/* ---------------- Menu lateral ---------------- */
+    /* Botoes do Streamlit centralizam o conteudo em tres niveis
+       (button, div e span). E preciso zerar os tres para o texto
+       ficar a esquerda. */
+    section[data-testid="stSidebar"] div[data-testid="stButton"] {
         margin-bottom: 0;
     }
-    section[data-testid="stSidebar"] [data-testid="stButton"] button {
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button,
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button > div,
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button > div > span {
+        justify-content: flex-start !important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button {
         background: transparent !important;
         border: none !important;
         box-shadow: none !important;
         min-height: unset;
-        height: auto;
-        padding: 4px 8px;
+        padding: 5px 8px;
+        border-left: 3px solid transparent;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button p {
+        text-align: left !important;
         font-size: 13px;
         font-weight: 450;
-        border-left: 3px solid transparent;
-        transition: background 0.12s ease;
     }
-    /* o texto do botao do Streamlit vem dentro de um flexbox centralizado */
-    section[data-testid="stSidebar"] [data-testid="stButton"] button > div {
-        justify-content: flex-start !important;
-        width: 100%;
-    }
-    section[data-testid="stSidebar"] [data-testid="stButton"] button p {
-        text-align: left;
-    }
-    section[data-testid="stSidebar"] [data-testid="stButton"] button:hover {
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button:hover {
         background: rgba(127, 127, 127, 0.14) !important;
         border-color: transparent !important;
-        box-shadow: none !important;
     }
-    section[data-testid="stSidebar"] [data-testid="stButton"] button:active,
-    section[data-testid="stSidebar"] [data-testid="stButton"] button:focus,
-    section[data-testid="stSidebar"] [data-testid="stButton"] button:focus-visible {
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button:focus,
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button:focus-visible,
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button:active {
         background: transparent !important;
         border-color: transparent !important;
         box-shadow: none !important;
         outline: none !important;
     }
-    /* item atual: Streamlit marca botaes primary com kind="primary" */
-    section[data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"] {
-        background: transparent !important;
-        border-left: 3px solid #ff4b4b;
-        font-weight: 600;
-    }
-    section[data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"]:hover {
-        background: rgba(127, 127, 127, 0.14) !important;
-    }
 
-    /* Cartao de pendencias com borda propria, separado dos itens do menu */
+    /* Cartao de pendencias com borda propria */
     section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] {
-        padding: 4px;
+        padding: 3px;
         margin-bottom: 8px;
     }
     section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"]
-        [data-testid="stButton"] button {
+        div[data-testid="stButton"] button {
+        padding: 7px 8px;
+    }
+    section[data-testid="stVerticalBlockBorderWrapper"]
+        div[data-testid="stButton"] button p {
         font-size: 12.5px;
-        font-weight: 500;
-        padding: 6px 8px;
+        font-weight: 600;
     }
 
     /* Espacos mais justos */
