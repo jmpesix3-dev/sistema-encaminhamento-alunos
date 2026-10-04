@@ -314,16 +314,21 @@ def sidebar_navigation():
 
         st.divider()
 
-        # Assinatura
+        # Assinatura. Sem cor fixa: usa opacidade para ficar
+        # discreta nos dois temas, sem sumir no escuro.
         st.markdown(
             """
             <div style="
                 margin-top: 14px;
-                padding-top: 9px;
-                border-top: 1px solid #eceff4;
+                padding-top: 10px;
+                border-top: 1px solid rgba(127, 127, 127, 0.25);
                 text-align: center;">
-              <div style="font-size: 10px; color: #a8b0bd;">Desenvolvido por</div>
-              <div style="font-size: 11px; color: #7d8797; font-weight: 600; margin-top: 1px;">
+              <div style="font-size: 10px; opacity: 0.55;">Desenvolvido por</div>
+              <div style="
+                  font-size: 11px;
+                  font-weight: 650;
+                  opacity: 0.8;
+                  margin-top: 2px;">
                 C3 Sistemas e Serviços
               </div>
             </div>

@@ -158,10 +158,24 @@ def _cards_etapa(rotulos, valores, total, pagina, chave_estado, prefixo):
                     border-radius:8px;
                     padding:10px 12px;
                     margin-bottom:4px;">
-                  <div style="font-size:12px;color:#5a6472;margin-bottom:2px;">{rotulo}</div>
-                  <div style="font-size:26px;font-weight:600;color:{cor};line-height:1.1;">{quantidade}</div>
-                  <div style="font-size:12px;color:#8a94a6;margin-bottom:8px;">{pct:.0f}% do total</div>
-                  <div style="background:#eef1f6;border-radius:3px;height:6px;overflow:hidden;">
+                  <div style="
+                      font-size:12px;
+                      opacity:0.75;
+                      margin-bottom:2px;">{rotulo}</div>
+                  <div style="
+                      font-size:26px;
+                      font-weight:600;
+                      color:{cor};
+                      line-height:1.1;">{quantidade}</div>
+                  <div style="
+                      font-size:12px;
+                      opacity:0.6;
+                      margin-bottom:8px;">{pct:.0f}% do total</div>
+                  <div style="
+                      background:rgba(127,127,127,0.25);
+                      border-radius:3px;
+                      height:6px;
+                      overflow:hidden;">
                     <div style="background:{cor};width:{max(pct, 1.5)}%;height:6px;"></div>
                   </div>
                 </div>

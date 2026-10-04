@@ -26,8 +26,12 @@ st.markdown("""
         padding-bottom: 2rem;
     }
     .stMetric {
-        background-color: #f0f2f6;
-        padding: 1rem;
+        /* Cinza translucido: funciona no tema claro e no escuro.
+           Um cinza fixo (ex.: #f0f2f6) deixaria o texto branco
+           do tema escuro invisivel sobre o fundo claro. */
+        background-color: rgba(127, 127, 127, 0.14);
+        border: 1px solid rgba(127, 127, 127, 0.18);
+        padding: 0.9rem 1rem;
         border-radius: 0.5rem;
     }
     .stDataFrame {
