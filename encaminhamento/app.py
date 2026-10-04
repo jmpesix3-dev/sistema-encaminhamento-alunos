@@ -75,19 +75,25 @@ st.markdown("""
         outline: none !important;
     }
 
-    /* Cartao de pendencias com borda propria */
+    /* Cartao de pendencias: mais compacto, sem a borda pesada */
     section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] {
-        padding: 3px;
+        padding: 2px 4px;
         margin-bottom: 8px;
+        border-radius: 6px;
     }
-    section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"]
+    section[data-testid="stVerticalBlockBorderWrapper"]
         div[data-testid="stButton"] button {
-        padding: 7px 8px;
+        padding: 6px 8px;
     }
     section[data-testid="stVerticalBlockBorderWrapper"]
         div[data-testid="stButton"] button p {
         font-size: 12.5px;
         font-weight: 600;
+    }
+
+    /* Margem do cabecalho customizado (o div do markdown) */
+    section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0;
     }
 
     /* Espacos mais justos */
