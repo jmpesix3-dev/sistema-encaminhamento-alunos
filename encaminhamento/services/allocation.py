@@ -316,6 +316,17 @@ class AllocationService:
                     sem_vaga.append(aluno)
                 all_no_address = sem_vaga
 
+                # Marca quem entrou na rodada e nao coube. Sem isso o
+                # indicador "Sem vaga" fica sempre em 0, porque o valor
+                # "waitlist" existe no modelo mas nunca era escrito.
+                if not self.preview and all_no_address:
+                    for aluno in all_no_address:
+                        update_student(
+                            session,
+                            aluno.id,
+                            allocation_status="sem_vaga",
+                        )
+
                 # Extrai os dados ainda dentro da sessao
                 no_address_data = [{
                     'student_id': a.id,
@@ -376,7 +387,9 @@ class AllocationService:
 
             resultado = session.execute(
                 update(Student)
-                .where(Student.allocation_status.in_(["allocated", "waitlist"]))
+                .where(Student.allocation_status.in_(
+                    ["allocated", "waitlist", "sem_vaga"]
+                ))
                 .values(
                     allocated_school_id=None,
                     allocation_status="pending",

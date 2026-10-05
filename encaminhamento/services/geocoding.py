@@ -346,16 +346,24 @@ class GeocodingService:
     def geocode_alunos(self, alunos: List[dict]) -> dict:
         total = len(alunos)
         resumo = {"exata": 0, "rua": 0, "localidade": 0, "distrito": 0, "centro": 0}
-
         for i, a in enumerate(alunos, 1):
             endereco = a.get("endereco") or ""
             self._avisar(i, total, endereco, "buscando...")
+
+            # Sem endereco nao ha o que buscar: segue para o proximo
+            # aluno em vez de derrubar o lote inteiro
+            if not endereco.strip():
+                resumo["sem_endereco"] = resumo.get("sem_endereco", 0) + 1
+                a["lat"] = a["lon"] = None
+                a["nivel"] = "sem_endereco"
+                self._avisar(i, total, endereco or "(sem endereco)", "sem_endereco")
+                continue
 
             coords, nivel, provedor = self.geocode(
                 endereco, abertura=0.25, semente=str(a.get("id", "")) + endereco
             )
             resumo[nivel] = resumo.get(nivel, 0) + 1
-            a["lat"], a["lon"] = coords
+            a["lat"], a["lon"] = coords if coords else (None, None)
             a["nivel"] = nivel
 
             self._avisar(i, total, endereco, nivel, coords)

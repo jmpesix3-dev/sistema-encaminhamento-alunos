@@ -2,7 +2,7 @@ import re
 from typing import Optional
 from encaminhamento.database.models import School
 from encaminhamento.database import get_session
-from encaminhamento.database.crud import find_or_create_school
+from encaminhamento.database.crud import find_or_create_school, list_schools
 
 
 ORDINAIS = re.compile(r"^\s*\d+\s*[ªº°]\s*", re.IGNORECASE)

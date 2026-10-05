@@ -12,7 +12,9 @@ from encaminhamento.database.crud import (
     get_batch, add_students_to_batch,
     get_students_for_batch, update_batch_status,
 )
-from encaminhamento.database.models import BatchStatus, StudentStatus
+from encaminhamento.database.models import (
+    BatchStatus, Student, StudentStatus,
+)
 from encaminhamento.services.pdf_generator import generate_batch_pdf
 from encaminhamento.services.status_tracker import auto_advance_batch_status
 
@@ -84,34 +86,49 @@ def render():
         if origin_school and dest_school:
             origin_school_id = origin_school["id"]
             dest_school_id = dest_school["id"]
-            
+
             with get_session() as session:
-                # Get students from origin school going to this destination
-                available_students = list_students(
-                    session,
-                    origin_school_id=origin_school_id,
-                    destination_school_id=dest_school_id,
-                    status=StudentStatus.DRAFT,
-                    limit=500
-                )
-                
-                # Also include PENDING students not in any batch
-                pending_students = list_students(
-                    session,
-                    origin_school_id=origin_school_id,
-                    destination_school_id=dest_school_id,
-                    status=StudentStatus.PENDING,
-                    limit=500
-                )
-                
-                # Combine and deduplicate
-                all_students = {s.id: s for s in available_students}
-                for s in pending_students:
-                    all_students[s.id] = s
-                available_students = list(all_students.values())
-            
+                # Candidatos ao lote: quem a alocacao colocou NESTA
+                # escola, mais quem ainda nao foi alocado e tem esta
+                # escola como opcao.
+                #
+                # O filtro por destino do CRUD acha 1a OU 2a opcao, o que
+                # traria junto quem foi alocado noutra escola.
+                ja_alocados = [
+                    s for s in list_students(
+                        session,
+                        origin_school_id=origin_school_id,
+                        limit=2000,
+                    )
+                    if s.allocated_school_id == dest_school_id
+                    and s.id not in {i.student_id for i in
+                                     st.session_state.get("alunos_em_lote", [])}
+                ]
+
+                por_opcao = [
+                    s for s in list_students(
+                        session,
+                        origin_school_id=origin_school_id,
+                        destination_school_id=dest_school_id,
+                        status=StudentStatus.DRAFT,
+                        limit=500,
+                    )
+                ]
+
+                available_students = {s.id: s for s in ja_alocados + por_opcao}
+                available_students = list(available_students.values())
+
+                # Quantos ja foram alocados para esta escola, para o
+                # usuario ver quanto da capacidade ja foi ocupado
+                total_alocados = session.query(Student).filter(
+                    Student.allocated_school_id == dest_school_id
+                ).count()
+
             if available_students:
-                st.caption(f"{len(available_students)} aluno(s) disponíveis para este par de escolas")
+                st.caption(
+                    f"{total_alocados} aluno(s) alocado(s) para esta escola · "
+                    f"{len(available_students)} disponível(is) para o lote"
+                )
                 
                 # Show as table with checkboxes
                 student_data = []
@@ -237,7 +254,10 @@ def render():
                             "origin_class": batch.origin_class.name if batch.origin_class else "N/A",
                             "year": batch.year,
                             "student_count": batch.student_count,
-                            "status": rotulo_lote(batch.status),
+                            # enum cru: as comparacoes com BatchStatus.value
+                            # em diante dependem do valor, nao do rotulo
+                            "status": batch.status,
+                            "status_label": rotulo_lote(batch.status),
                             "notes": batch.notes,
                             "pdf_path": batch.pdf_path,
                         }
@@ -276,7 +296,7 @@ def render():
                         st.metric("Ano", batch_info["year"])
                     with col3:
                         st.metric("Alunos", batch_info["student_count"])
-                        st.markdown(f"Status: {batch_info['status'].upper()}")
+                        st.markdown(f"Status: {batch_info['status_label'].upper()}")
                     
                     if batch_info["notes"]:
                         st.caption(f"Observações: {batch_info['notes']}")
@@ -293,13 +313,17 @@ def render():
                     col1, col2, col3, col4 = st.columns(4)
                     
                     with col1:
-                        if batch_info["status"] in [BatchStatus.DRAFT.value, BatchStatus.GENERATED.value]:
+                        if batch_info["status"] in [BatchStatus.DRAFT, BatchStatus.GENERATED]:
                             if st.button("📄 Gerar PDF", use_container_width=True, key=f"gen_pdf_{batch_info['id']}"):
-                                pdf_path = generate_batch_pdf(batch_info["id"])
-                                with get_session() as session:
-                                    update_batch_status(session, batch_info["id"], BatchStatus.GENERATED, pdf_path)
-                                st.success("PDF gerado!")
-                                st.rerun()
+                                try:
+                                    pdf_path = generate_batch_pdf(batch_info["id"])
+                                except ValueError as exc:
+                                    st.error(str(exc))
+                                else:
+                                    with get_session() as session:
+                                        update_batch_status(session, batch_info["id"], BatchStatus.GENERATED, pdf_path)
+                                    st.success("PDF gerado!")
+                                    st.rerun()
                     
                     with col2:
                         if batch.status == BatchStatus.GENERATED and batch.pdf_path:
