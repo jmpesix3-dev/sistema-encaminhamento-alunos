@@ -2,6 +2,7 @@ import streamlit as st
 from encaminhamento.utils.status import (
     opcoes_lote, para_valor_lote, rotulo_aluno, rotulo_lote,
 )
+from encaminhamento.utils.helpers import parse_email_list
 from encaminhamento.ui.components import (
     sidebar_navigation, school_selector, render_batch_table, confirm_dialog,
     seletor_abas,
@@ -251,6 +252,7 @@ def render():
                             "id": batch.id,
                             "origin_school": batch.origin_school.name if batch.origin_school else "",
                             "destination_school": batch.destination_school.name if batch.destination_school else "",
+                            "destination_school_email": batch.destination_school.email if batch.destination_school else "",
                             "origin_class": batch.origin_class.name if batch.origin_class else "N/A",
                             "year": batch.year,
                             "student_count": batch.student_count,
@@ -356,10 +358,18 @@ def render():
                         st.divider()
                         st.subheader("Enviar Email")
                         
+                        school_email = batch_info.get("destination_school_email", "")
                         to_emails = st.text_area(
-                            "Emails destinatários (um por linha):",
+                            "Emails destinatários (um por linha ou separados por vírgula):",
                             key=f"email_to_{batch.id}",
+                            value=school_email,
                             placeholder="diretor@escola.com\nsecretaria@escola.com"
+                        )
+                        
+                        cc_emails = st.text_area(
+                            "CC (opcional, um por linha ou separados por vírgula):",
+                            key=f"email_cc_{batch.id}",
+                            placeholder="coordenador@rede.edu.br"
                         )
                         
                         custom_msg = st.text_area(
@@ -370,18 +380,19 @@ def render():
                         col1, col2 = st.columns(2)
                         with col1:
                             if st.button("📧 Enviar", key=f"confirm_send_{batch.id}"):
-                                emails = [e.strip() for e in to_emails.split("\n") if e.strip()]
+                                emails = parse_email_list(to_emails)
+                                cc = parse_email_list(cc_emails) if cc_emails else None
                                 if emails:
                                     from encaminhamento.services.email_sender import send_batch_notification
                                     result = send_batch_notification(
-                                        batch.id, emails, batch.pdf_path, custom_msg
+                                        batch.id, emails, batch.pdf_path, custom_msg, cc=cc
                                     )
                                     if result.success:
                                         st.success(result.message)
                                     else:
                                         st.error(f"Erro: {result.message} - {result.error}")
                                 else:
-                                    st.error("Informe pelo menos um email")
+                                    st.error("Informe pelo menos um email válido")
                         with col2:
                             if st.button("❌ Cancelar", key=f"cancel_send_{batch.id}"):
                                 st.session_state[f"send_email_batch_{batch.id}"] = False

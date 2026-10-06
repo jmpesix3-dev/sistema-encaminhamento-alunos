@@ -134,7 +134,9 @@ def send_batch_notification(
     batch_id: int,
     to_emails: List[str],
     pdf_path: str = None,
-    custom_message: str = None
+    custom_message: str = None,
+    cc: List[str] = None,
+    bcc: List[str] = None,
 ) -> EmailResult:
     """Send batch forwarding notification with PDF attachment."""
     with get_session() as session:
@@ -194,7 +196,9 @@ Atenciosamente,
         subject=subject,
         body_text=body_text,
         body_html=body_html,
-        attachments=attachments
+        attachments=attachments,
+        cc=cc,
+        bcc=bcc,
     )
 
 

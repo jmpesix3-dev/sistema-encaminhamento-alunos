@@ -1,8 +1,24 @@
 import re
-from typing import Optional
+from typing import List, Optional
 from encaminhamento.database.models import School
 from encaminhamento.database import get_session
 from encaminhamento.database.crud import find_or_create_school, list_schools
+
+
+EMAIL_RE = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+
+
+def parse_email_list(raw: str) -> List[str]:
+    """
+    Extrai enderecos de email de um texto livre.
+
+    Suporta separadores por linha, virgula, ponto-e-virgula e espaco.
+    Mantem a ordem e remove duplicatas.
+    """
+    if not raw:
+        return []
+    matches = EMAIL_RE.findall(raw)
+    return list(dict.fromkeys(matches))
 
 
 ORDINAIS = re.compile(r"^\s*\d+\s*[ªº°]\s*", re.IGNORECASE)

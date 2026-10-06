@@ -72,7 +72,7 @@ from encaminhamento.services.status_tracker import (
     bulk_transition_students,
 )
 from encaminhamento.services.geocoding import haversine_distance
-from encaminhamento.utils.helpers import normalize_school_name, match_school_name
+from encaminhamento.utils.helpers import normalize_school_name, match_school_name, parse_email_list
 from encaminhamento.config import PDF_EXPORT_DIR
 
 # Coordinate constants for São João da Barra (matching geocoding.py DISTRITOS)
@@ -775,7 +775,7 @@ def test_email(data, batch_id):
 # ---------------------------------------------------------------------------
 # Test 10: Edge cases
 # ---------------------------------------------------------------------------
-def test_edge_cases(data):
+def test_edge_cases(data, batch_id=None):
     section("TEST 10: Edge Cases")
 
     d = data["dest_schools"]
@@ -804,6 +804,33 @@ def test_edge_cases(data):
     check("SITUACAO_ALUNO has encaminhados", any(k == "encaminhados" for k, _, _ in SITUACAO_ALUNO))
     check("SITUACAO_ALUNO has info_pendente", any(k == "info_pendente" for k, _, _ in SITUACAO_ALUNO))
 
+    # Test parse_email_list with various separators
+    check("parse_email_list handles newlines",
+          parse_email_list("a@x.com\nb@x.com") == ["a@x.com", "b@x.com"])
+    check("parse_email_list handles commas",
+          parse_email_list("a@x.com, b@x.com") == ["a@x.com", "b@x.com"])
+    check("parse_email_list handles semicolons",
+          parse_email_list("a@x.com; b@x.com") == ["a@x.com", "b@x.com"])
+    check("parse_email_list deduplicates",
+          parse_email_list("a@x.com, a@x.com, b@x.com") == ["a@x.com", "b@x.com"])
+    check("parse_email_list handles empty", parse_email_list("") == [])
+    check("parse_email_list ignores invalid",
+          parse_email_list("notanemail, a@x.com") == ["a@x.com"])
+
+    # Test send_batch_notification with cc parameter
+    smtp_patcher = mock_smtp()
+    smtp_patcher.start()
+    try:
+        if batch_id:
+            result = send_batch_notification(
+                batch_id=batch_id,
+                to_emails=["test@example.com"],
+                cc=["cc@example.com"],
+            )
+            check("send_batch_notification accepts cc param", hasattr(result, "success"))
+    finally:
+        smtp_patcher.stop()
+
 
 # ---------------------------------------------------------------------------
 # Main
@@ -826,7 +853,7 @@ def main():
     batch_id = test_batches(data)
     test_status_transitions(data, batch_id)
     test_email(data, batch_id)
-    test_edge_cases(data)
+    test_edge_cases(data, batch_id)
 
     # Summary
     section("TEST SUMMARY")

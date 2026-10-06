@@ -1,5 +1,6 @@
 import streamlit as st
 from encaminhamento.utils.status import rotulo_aluno, rotulo_lote
+from encaminhamento.utils.helpers import parse_email_list
 from encaminhamento.ui.components import sidebar_navigation, seletor_abas
 from encaminhamento.database import get_session
 from encaminhamento.database.crud import list_batches, list_schools
@@ -146,6 +147,7 @@ def render():
                     from encaminhamento.database.crud import get_batch
                     batch = get_batch(session, batch_id)
                     if batch:
+                        school_email = batch.destination_school.email if batch.destination_school else ""
                         st.info(f"""
                         **Lote #{batch.id}**  
                         Escola Destino: {batch.destination_school.name}  
@@ -160,15 +162,19 @@ def render():
                                 if count > 0:
                                     st.caption(f"  - {status}: {count}")
                         
-                        # Email form
+                        if not SMTP_USER or not SMTP_PASSWORD:
+                            st.warning("⚠️ SMTP não configurado. Configure SMTP_USER e SMTP_PASSWORD no .env.")
+                        
+                        # Email form - auto-populate with destination school email
                         to_emails = st.text_area(
-                            "Emails destinatários (um por linha):",
+                            "Emails destinatários (um por linha ou separados por vírgula):",
+                            value=school_email,
                             key="email_to_addresses",
                             placeholder="diretor@escoladestino.com\nsecretaria@escoladestino.com"
                         )
                         
                         cc_emails = st.text_area(
-                            "CC (opcional):",
+                            "CC (opcional, um por linha ou separados por vírgula):",
                             key="email_cc_addresses",
                             placeholder="coordenador@rede.edu.br"
                         )
@@ -182,14 +188,14 @@ def render():
                         include_pdf = st.checkbox("Anexar PDF do encaminhamento", value=True, key="email_attach_pdf")
                         
                         if st.button("📧 Enviar Email", type="primary", disabled=not to_emails.strip()):
-                            emails = [e.strip() for e in to_emails.split("\n") if e.strip()]
-                            cc = [e.strip() for e in cc_emails.split("\n") if e.strip()] if cc_emails else None
+                            emails = parse_email_list(to_emails)
+                            cc = parse_email_list(cc_emails) if cc_emails else None
                             
                             pdf_path = batch.pdf_path if include_pdf and batch.pdf_path else None
                             
                             with st.spinner("Enviando email..."):
                                 result = send_batch_notification(
-                                    batch.id, emails, pdf_path, custom_message
+                                    batch.id, emails, pdf_path, custom_message, cc=cc
                                 )
                             
                             if result.success:
