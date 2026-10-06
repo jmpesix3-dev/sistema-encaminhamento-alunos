@@ -6,7 +6,7 @@ from pathlib import Path
 
 from sqlalchemy import inspect, text
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from encaminhamento.database import init_db, engine
 

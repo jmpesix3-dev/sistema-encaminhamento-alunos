@@ -400,10 +400,12 @@ def detalhar_situacao_aluno(situacao: str) -> List[dict]:
         linhas = []
         for a in alunos:
             linhas.append({
+                "ID": a.id,
                 "Aluno": a.name,
                 "Origem": a.origin_school.name if a.origin_school else "",
                 "1ª opção": a.destination_school_1.name if a.destination_school_1 else "",
-                "Endereço": (a.address or "")[:50],
+                "2ª opção": a.destination_school_2.name if a.destination_school_2 else "",
+                "Endereço": a.address or "",
                 "Alocado em": a.allocated_school.name if a.allocated_school else "",
                 "Status": ROTULO_STATUS_ALUNO.get(a.status.value, a.status.value),
             })

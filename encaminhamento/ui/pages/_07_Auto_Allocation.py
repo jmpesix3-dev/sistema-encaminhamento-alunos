@@ -76,7 +76,7 @@ def _mostrar_resultado(resultado, titulo):
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Alunos", resultado.total_students)
     c2.metric("Alocados", resultado.allocated)
-    c3.metric("Sem vaga", resultado.no_address)
+    c3.metric("Sem vaga", resultado.sem_vaga)
     with c4:
         dist = [r.distance_km for r in resultado.results if r.distance_km is not None]
         if dist:
@@ -136,7 +136,7 @@ def _mostrar_resultado(resultado, titulo):
     segunda = resultado.allocated - primeira
     st.caption(
         f"{primeira} alocado(s) na 1a opcao, {segunda} na 2a opcao, "
-        f"{resultado.no_address} sem vaga."
+        f"{resultado.sem_vaga} sem vaga."
     )
 
 
@@ -211,7 +211,7 @@ def render():
                 st.session_state["previa"] = resultado
                 st.success(
                     f"**{resultado.allocated} aluno(s) alocado(s)**, "
-                    f"{resultado.no_address} sem vaga."
+        f"{resultado.sem_vaga} sem vaga."
                 )
 
         with col2:

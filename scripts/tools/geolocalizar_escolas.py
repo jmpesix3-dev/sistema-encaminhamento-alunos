@@ -10,7 +10,7 @@ Uso:
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from encaminhamento.database import init_db, get_session
 from encaminhamento.database.crud import list_schools, update_school

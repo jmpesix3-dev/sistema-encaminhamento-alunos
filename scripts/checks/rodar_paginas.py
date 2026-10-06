@@ -4,6 +4,12 @@ Roda cada pagina do app de verdade e reporta as excecoes.
 Usa o AppTest do proprio Streamlit, que renderiza a pagina sem
 precisar de navegador.
 """
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tests"))
+
 import traceback
 
 from streamlit.testing.v1 import AppTest

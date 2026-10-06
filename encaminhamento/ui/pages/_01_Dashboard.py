@@ -10,7 +10,7 @@ from datetime import datetime
 
 from encaminhamento.ui.components import sidebar_navigation, ir_para
 from encaminhamento.database import get_session
-from encaminhamento.database.crud import list_schools
+from encaminhamento.database.crud import list_schools, update_student
 from encaminhamento.services.relatorio import (
     montar_resumo, exportar_resumo, detalhar_pendencia,
     detalhar_alunos_por_escola, contar_situacao_aluno,
@@ -19,6 +19,10 @@ from encaminhamento.services.relatorio import (
     ORDEM_ALUNO, ORDEM_LOTE, COR_STATUS,
     SITUACAO_ALUNO, COR_SITUACAO,
 )
+from encaminhamento.services.allocation import get_allocation_service
+from encaminhamento.database.models import StudentStatus
+from encaminhamento.utils.helpers import get_or_create_school_from_name, format_student_name
+from encaminhamento.utils.status import opcoes_aluno, para_valor_aluno
 from encaminhamento.config import DATA_DIR
 
 PASSOS = [
@@ -145,6 +149,14 @@ def _cards_etapa(rotulos, valores, total, pagina, chave_estado, prefixo):
     n = len(rotulos)
     cols = st.columns(n)
 
+    # Detecta clique via query params
+    nav_toggle = st.query_params.get("nav_toggle", "")
+    nav_filter_key = st.query_params.get("nav_filter_key", "")
+    nav_filter_val = st.query_params.get("nav_filter_val", "")
+    if nav_toggle:
+        ir_para(nav_toggle, **{nav_filter_key: nav_filter_val})
+        st.rerun()
+
     for col, chave in zip(cols, rotulos):
         quantidade = valores.get(chave, 0)
         pct = (quantidade / total * 100) if total else 0
@@ -152,47 +164,43 @@ def _cards_etapa(rotulos, valores, total, pagina, chave_estado, prefixo):
         cor = COR_STATUS.get(chave, "#2f7ed8")
 
         with col:
-            st.markdown(
-                f"""
+            if quantidade > 0:
+                card_html = f"""
                 <div style="
                     border:1px solid {cor}55;
                     border-top:3px solid {cor};
                     border-radius:8px;
                     padding:10px 12px;
-                    margin-bottom:4px;">
-                  <div style="
-                      font-size:12px;
-                      opacity:0.75;
-                      margin-bottom:2px;">{rotulo}</div>
-                  <div style="
-                      font-size:26px;
-                      font-weight:600;
-                      color:{cor};
-                      line-height:1.1;">{quantidade}</div>
-                  <div style="
-                      font-size:12px;
-                      opacity:0.6;
-                      margin-bottom:8px;">{pct:.0f}% do total</div>
-                  <div style="
-                      background:rgba(127,127,127,0.25);
-                      border-radius:3px;
-                      height:6px;
-                      overflow:hidden;">
+                    cursor:pointer;
+                    transition:opacity 0.2s;"
+                     onclick="var u=new URLSearchParams(window.location.search);u.set('nav_toggle','{pagina}');u.set('nav_filter_key','{chave_estado}');u.set('nav_filter_val','{chave}');window.location.search=u.toString()">
+                  <div style="font-size:12px;opacity:0.75;margin-bottom:2px;">{rotulo}</div>
+                  <div style="font-size:26px;font-weight:600;color:{cor};line-height:1.1;">{quantidade}</div>
+                  <div style="font-size:12px;opacity:0.6;margin-bottom:8px;">{pct:.0f}% do total</div>
+                  <div style="background:rgba(127,127,127,0.25);border-radius:3px;height:6px;overflow:hidden;">
                     <div style="background:{cor};width:{max(pct, 1.5)}%;height:6px;"></div>
                   </div>
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-            # O botao fica fora do card para o clique funcionar bem
-            if st.button(
-                "Ver lista",
-                key=f"{prefixo}_{chave}",
-                use_container_width=True,
-                disabled=quantidade == 0,
-            ):
-                ir_para(pagina, **{chave_estado: chave})
+                """
+                st.markdown(card_html, unsafe_allow_html=True)
+            else:
+                st.markdown(
+                    f"""
+                    <div style="
+                        border:1px solid {cor}55;
+                        border-top:3px solid {cor};
+                        border-radius:8px;
+                        padding:10px 12px;">
+                      <div style="font-size:12px;opacity:0.75;margin-bottom:2px;">{rotulo}</div>
+                      <div style="font-size:26px;font-weight:600;color:{cor};line-height:1.1;">{quantidade}</div>
+                      <div style="font-size:12px;opacity:0.6;margin-bottom:8px;">{pct:.0f}% do total</div>
+                      <div style="background:rgba(127,127,127,0.25);border-radius:3px;height:6px;overflow:hidden;">
+                        <div style="background:{cor};width:{max(pct, 1.5)}%;height:6px;"></div>
+                      </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
 
 def _situacao_por_escola():
@@ -263,8 +271,24 @@ def resumo_total_escolas():
 
 
 def _situacao_aluno():
-    """Quatro cards de situacao do aluno, cada um clicavel."""
-    st.subheader("Situação dos alunos")
+    """Quatro cards clicaveis; ao clicar num card, os alunos aparecem abaixo em editor."""
+
+    from encaminhamento.utils.helpers import get_or_create_school_from_name
+    from encaminhamento.utils.status import opcoes_aluno, para_valor_aluno
+
+    # Detecta clique via query params (botao HTML dentro do card)
+    toggle = st.query_params.get("toggle", "")
+    if toggle:
+        chave = toggle
+        expandido = bool(st.session_state.get(f"sit_aluno_lista_{chave}"))
+        if expandido:
+            st.session_state.pop(f"sit_aluno_lista_{chave}", None)
+        else:
+            for _c in ("alunos", "encaminhados", "pendente", "info_pendente"):
+                st.session_state.pop(f"sit_aluno_lista_{_c}", None)
+            st.session_state[f"sit_aluno_lista_{chave}"] = True
+        st.query_params.clear()
+        st.rerun()
 
     contagens = contar_situacao_aluno()
     total = contagens["alunos"]
@@ -276,40 +300,144 @@ def _situacao_aluno():
         ("info_pendente", "Informação Pendente", contagens["info_pendente"], COR_SITUACAO["info_pendente"], "Alunos"),
     ]
 
+    def _pct(q):
+        return (q / total * 100) if total else 0
+
+    st.subheader("Situação dos alunos")
+
+    st.markdown("""
+    <style>
+    .status-card-click {
+        position: relative;
+        cursor: pointer;
+        transition: opacity 0.2s;
+    }
+    .status-card-click:hover {
+        opacity: 0.85;
+    }
+    .status-card-click button {
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+        cursor: pointer;
+        z-index: 2;
+        opacity: 0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     cols = st.columns(4, vertical_alignment="bottom")
-    for col, (chave, titulo, quantidade, cor, pagina) in zip(cols, cards):
+    for col, (chave, titulo, quantidade, cor, _pagina) in zip(cols, cards):
         with col:
-            pct = (quantidade / total * 100) if total else 0
-            st.markdown(
-                f"""
-                <div style="
-                    border:1px solid {cor}55;
-                    border-top:3px solid {cor};
-                    border-radius:8px;
-                    padding:10px 12px;
-                    margin-bottom:4px;">
-                  <div style="
-                      font-size:11px;
-                      opacity:0.75;
-                      margin-bottom:2px;">{titulo}</div>
-                  <div style="
-                      font-size:26px;
-                      font-weight:600;
-                      color:{cor};
-                      line-height:1.1;">{quantidade}</div>
-                  <div style="
-                      font-size:11px;
-                      opacity:0.6;
-                      margin-bottom:8px;">{pct:.0f}% do total</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            pct = _pct(quantidade)
+            expandido = bool(st.session_state.get(f"sit_aluno_lista_{chave}"))
+            if expandido and quantidade > 0:
+                cor = "#9c27b0"
+
+            card_html = f"""
+            <div class="status-card-click"
+                 onclick="var u=new URLSearchParams(window.location.search);u.set('toggle','{chave}');window.location.search=u.toString()">
+              <div style="
+                  border:1px solid {cor}55;
+                  border-top:3px solid {cor};
+                  border-radius:8px;
+                  padding:10px 12px;">
+                <div style="font-size:11px;opacity:0.75;margin-bottom:2px;">{titulo}</div>
+                <div style="font-size:26px;font-weight:600;color:{cor};line-height:1.1;">{quantidade}</div>
+                <div style="font-size:11px;opacity:0.6;">{pct:.0f}% do total</div>
+              </div>
+            </div>
+            """ if quantidade > 0 else f"""
+            <div style="
+                border:1px solid {cor}55;
+                border-top:3px solid {cor};
+                border-radius:8px;
+                padding:10px 12px;">
+              <div style="font-size:11px;opacity:0.75;margin-bottom:2px;">{titulo}</div>
+              <div style="font-size:26px;font-weight:600;color:{cor};line-height:1.1;">{quantidade}</div>
+              <div style="font-size:11px;opacity:0.6;">{pct:.0f}% do total</div>
+            </div>
+            """
+            st.markdown(card_html, unsafe_allow_html=True)
+
+    for chave, titulo, quantidade, cor, pagina in cards:
+        if quantidade == 0:
+            continue
+        if not st.session_state.get(f"sit_aluno_lista_{chave}"):
+            continue
+
+        with st.container(border=True):
+            linhas = detalhar_situacao_aluno(chave)
+            if not linhas:
+                st.caption(f"Sem alunos em '{titulo}'.")
+            else:
+                df = pd.DataFrame(linhas)
+                edited = st.data_editor(
+                    df,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "ID": st.column_config.NumberColumn("ID", disabled=True),
+                        "Origem": st.column_config.TextColumn("Origem", disabled=True),
+                        "Alocado em": st.column_config.TextColumn("Alocado em", disabled=True),
+                        "1ª opção": st.column_config.TextColumn("1ª opção"),
+                        "2ª opção": st.column_config.TextColumn("2ª opção"),
+                        "Endereço": st.column_config.TextColumn("Endereço"),
+                        "Status": st.column_config.SelectboxColumn(
+                            "Status", options=opcoes_aluno(), required=True
+                        ),
+                    },
+                    key=f"sit_aluno_edit_{chave}",
+                    num_rows="dynamic",
+                )
+                st.caption(f"{len(edited)} aluno(s).")
+                if st.button(
+                    "💾 Salvar e tentar encaminhar novamente",
+                    key=f"sit_aluno_salvar_{chave}",
+                    type="primary",
+                    use_container_width=True,
+                ):
+                    mudancas = 0
+                    for _, row in edited.iterrows():
+                        sid = int(row["ID"])
+                        original = df[df["ID"] == sid].iloc[0]
+                        if row.equals(original):
+                            continue
+
+                        d1 = (row.get("1ª opção") or "").strip()
+                        d2 = (row.get("2ª opção") or "").strip()
+
+                        with get_session() as session:
+                            update_student(
+                                session,
+                                sid,
+                                name=row["Aluno"],
+                                address=row["Endereço"],
+                                destination_school_1_id=(
+                                    get_or_create_school_from_name(d1, is_destination=True) if d1 else None
+                                ),
+                                destination_school_2_id=(
+                                    get_or_create_school_from_name(d2, is_destination=True) if d2 else None
+                                ),
+                                status=para_valor_aluno(row["Status"]),
+                            )
+                        mudancas += 1
+
+                    if mudancas:
+                        get_allocation_service().run_allocation()
+                        st.success(f"{mudancas} aluno(s) atualizado(s). Encaminhamento tentado novamente.")
+                        st.session_state.pop(f"sit_aluno_lista_{chave}", None)
+                        st.rerun()
+                    else:
+                        st.info("Nenhuma alteração detectada.")
+
             if st.button(
-                "Ver lista", key=f"sit_aluno_{chave}", use_container_width=True,
-                disabled=quantidade == 0,
+                "Ocultar", key=f"sit_aluno_occ_{chave}", use_container_width=True
             ):
-                ir_para(pagina, aluno_status=chave)
+                st.session_state.pop(f"sit_aluno_lista_{chave}", None)
+                st.rerun()
 
 
 def _situacao(resumo):

@@ -1,4 +1,10 @@
 """Interage com filtros, abas e botoes de cada pagina para achar erro de runtime."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tests"))
+
 from streamlit.testing.v1 import AppTest
 
 from gerar_arquivos_teste import gerar, limpar

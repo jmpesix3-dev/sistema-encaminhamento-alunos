@@ -8,7 +8,7 @@ com caminho fixo, que quebrariam em outro computador.
 import shutil
 from pathlib import Path
 
-RAIZ = Path(__file__).parent
+RAIZ = Path(__file__).resolve().parent.parent.parent
 PASTA = RAIZ / "_testes_paginas"
 
 # nome de atalho -> modulo da pagina
