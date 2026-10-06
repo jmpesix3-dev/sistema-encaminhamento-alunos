@@ -45,6 +45,18 @@ COR_STATUS = {
     "cancelled": "#d64545",   # vermelho: cancelado
 }
 
+# Situacoes do painel de controle: contagem rapida de alunos por
+# categoria, cada uma clicavel para ir ate a lista correspondente.
+# Lista de tuplas (chave, rotulo, cor) para iterar no painel e testes.
+SITUACAO_ALUNO = [
+    ("alunos", "Alunos", COR_STATUS.get("sent", "#7c5cd6")),
+    ("encaminhados", "Encaminhados", "#1f9d55"),
+    ("pendente", "Pendente", "#f0a30a"),
+    ("info_pendente", "Informação Pendente", "#d64545"),
+]
+
+COR_SITUACAO = {chave: cor for chave, _, cor in SITUACAO_ALUNO}
+
 
 @dataclass
 class Pendencia:
@@ -308,6 +320,94 @@ def montar_resumo() -> Resumo:
 
     resumo.pendencias = sorted(pendencias, key=lambda p: (p.criticidade, -p.quantidade))
     return resumo
+
+
+# ======================================================================
+# Situacao de alunos — 4 cards do painel
+# ======================================================================
+# Ficam fora de montar_resumo() de proposito: sao chamados sob demanda
+# pelo painel e servem tambem para navegar ate a pagina de Alunos.
+
+def contar_situacao_aluno() -> dict:
+    """
+    Contagens rapidas para os 4 cards do painel:
+
+    - alunos:        total de alunos cadastrados
+    - encaminhados:  alunos com escola alocada (allocated_school_id IS NOT NULL)
+    - pendente:      alunos sem alocacao (total - encaminhados)
+    - info_pendente: alunos com endereco ou 1a escola de destino faltando
+    """
+    with get_session() as session:
+        total = session.execute(select(func.count(Student.id))).scalar() or 0
+        encaminhados = session.execute(
+            select(func.count(Student.id))
+            .where(Student.allocated_school_id.isnot(None))
+        ).scalar() or 0
+
+        info_pendente = session.execute(
+            select(func.count(Student.id)).where(
+                (Student.address.is_(None))
+                | (Student.address == "")
+                | (Student.destination_school_1_id.is_(None))
+            )
+        ).scalar() or 0
+
+        return {
+            "alunos": total,
+            "encaminhados": encaminhados,
+            "pendente": total - encaminhados,
+            "info_pendente": info_pendente,
+        }
+
+
+def detalhar_situacao_aluno(situacao: str) -> List[dict]:
+    """
+    Lista de alunos de uma situacao para exibicao detalhada.
+
+    `situacao` usa as chaves de SITUACAO_ALUNO.
+    Devolve lista de dicionarios prontos para dataframe.
+    """
+    with get_session() as session:
+        if situacao == "alunos":
+            alunos = session.execute(
+                select(Student).order_by(Student.name)
+            ).scalars().all()
+        elif situacao == "encaminhados":
+            alunos = session.execute(
+                select(Student)
+                .where(Student.allocated_school_id.isnot(None))
+                .order_by(Student.name)
+            ).scalars().all()
+        elif situacao == "pendente":
+            alunos = session.execute(
+                select(Student)
+                .where(Student.allocated_school_id.is_(None))
+                .order_by(Student.name)
+            ).scalars().all()
+        elif situacao == "info_pendente":
+            alunos = session.execute(
+                select(Student)
+                .where(
+                    (Student.address.is_(None))
+                    | (Student.address == "")
+                    | (Student.destination_school_1_id.is_(None))
+                )
+                .order_by(Student.name)
+            ).scalars().all()
+        else:
+            return []
+
+        linhas = []
+        for a in alunos:
+            linhas.append({
+                "Aluno": a.name,
+                "Origem": a.origin_school.name if a.origin_school else "",
+                "1ª opção": a.destination_school_1.name if a.destination_school_1 else "",
+                "Endereço": (a.address or "")[:50],
+                "Alocado em": a.allocated_school.name if a.allocated_school else "",
+                "Status": ROTULO_STATUS_ALUNO.get(a.status.value, a.status.value),
+            })
+        return linhas
 
 
 def _pendencia_atualizacao():

@@ -152,7 +152,7 @@ def render():
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Alunos", stats["total"])
     c2.metric("Alocados", stats["allocated"])
-    c3.metric("Sem vaga", stats["waitlist"])
+    c3.metric("Sem vaga", stats["sem_vaga"])
     c4.metric("Pendentes", stats["pending"])
 
     if stats["total"] == 0:

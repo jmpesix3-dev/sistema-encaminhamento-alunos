@@ -26,7 +26,8 @@ class AllocationSummary:
     """Resumo de uma execucao da alocacao."""
     total_students: int
     allocated: int
-    waitlist: int
+    waitlist: int  # DEPRECATED: kept for compat, use sem_vaga
+    sem_vaga: int  # students that could not be allocated
     no_address: int
     no_capacity: int
     by_school: Dict[int, Dict]  # school_id -> {allocated, capacity, students}
@@ -158,7 +159,7 @@ class AllocationService:
 
                 if not dest_schools:
                     return AllocationSummary(
-                        total_students=0, allocated=0, waitlist=0,
+                        total_students=0, allocated=0, waitlist=0, sem_vaga=0,
                         no_address=0, no_capacity=0,
                         by_school={}, results=[],
                     )
@@ -367,7 +368,8 @@ class AllocationService:
         return AllocationSummary(
             total_students=total,
             allocated=alocados_total,
-            waitlist=0,
+            waitlist=len(all_no_address),
+            sem_vaga=len(all_no_address),
             no_address=len(all_no_address),
             no_capacity=0,
             by_school={k: v for k, v in by_school.items() if v.get('school_name')},
@@ -411,7 +413,7 @@ class AllocationService:
                 select(func.count(Student.id)).where(Student.allocation_status == "allocated")
             ).scalar() or 0
             waitlist = session.execute(
-                select(func.count(Student.id)).where(Student.allocation_status == "waitlist")
+                select(func.count(Student.id)).where(Student.allocation_status == "sem_vaga")
             ).scalar() or 0
             pending = session.execute(
                 select(func.count(Student.id)).where(Student.allocation_status == "pending")
@@ -436,7 +438,7 @@ class AllocationService:
             return {
                 'total': total,
                 'allocated': allocated,
-                'waitlist': waitlist,
+                'sem_vaga': waitlist,
                 'pending': pending,
                 'by_school': by_school
             }

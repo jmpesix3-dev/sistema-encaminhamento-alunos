@@ -13,9 +13,11 @@ from encaminhamento.database import get_session
 from encaminhamento.database.crud import list_schools
 from encaminhamento.services.relatorio import (
     montar_resumo, exportar_resumo, detalhar_pendencia,
-    detalhar_alunos_por_escola,
+    detalhar_alunos_por_escola, contar_situacao_aluno,
+    detalhar_situacao_aluno,
     ROTULO_STATUS_ALUNO, ROTULO_STATUS_LOTE,
     ORDEM_ALUNO, ORDEM_LOTE, COR_STATUS,
+    SITUACAO_ALUNO, COR_SITUACAO,
 )
 from encaminhamento.config import DATA_DIR
 
@@ -254,15 +256,60 @@ def _situacao_por_escola():
     )
 
 
-_TOTAL_ESCOLAS = []
-
-
 def resumo_total_escolas():
-    """Total de escolas cadastradas (guardado entre redesenhos)."""
-    if not _TOTAL_ESCOLAS:
-        with get_session() as session:
-            _TOTAL_ESCOLAS.append(len(list_schools(session)))
-    return _TOTAL_ESCOLAS[0]
+    """Total de escolas cadastradas."""
+    with get_session() as session:
+        return len(list_schools(session))
+
+
+def _situacao_aluno():
+    """Quatro cards de situacao do aluno, cada um clicavel."""
+    st.subheader("Situação dos alunos")
+
+    contagens = contar_situacao_aluno()
+    total = contagens["alunos"]
+
+    cards = [
+        ("alunos", "Alunos", contagens["alunos"], COR_SITUACAO["alunos"], "Alunos"),
+        ("encaminhados", "Encaminhados", contagens["encaminhados"], COR_SITUACAO["encaminhados"], "Alunos"),
+        ("pendente", "Pendente", contagens["pendente"], COR_SITUACAO["pendente"], "Alunos"),
+        ("info_pendente", "Informação Pendente", contagens["info_pendente"], COR_SITUACAO["info_pendente"], "Alunos"),
+    ]
+
+    cols = st.columns(4, vertical_alignment="bottom")
+    for col, (chave, titulo, quantidade, cor, pagina) in zip(cols, cards):
+        with col:
+            pct = (quantidade / total * 100) if total else 0
+            st.markdown(
+                f"""
+                <div style="
+                    border:1px solid {cor}55;
+                    border-top:3px solid {cor};
+                    border-radius:8px;
+                    padding:10px 12px;
+                    margin-bottom:4px;">
+                  <div style="
+                      font-size:11px;
+                      opacity:0.75;
+                      margin-bottom:2px;">{titulo}</div>
+                  <div style="
+                      font-size:26px;
+                      font-weight:600;
+                      color:{cor};
+                      line-height:1.1;">{quantidade}</div>
+                  <div style="
+                      font-size:11px;
+                      opacity:0.6;
+                      margin-bottom:8px;">{pct:.0f}% do total</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            if st.button(
+                "Ver lista", key=f"sit_aluno_{chave}", use_container_width=True,
+                disabled=quantidade == 0,
+            ):
+                ir_para(pagina, aluno_status=chave)
 
 
 def _situacao(resumo):
@@ -403,7 +450,10 @@ def render():
     _pendencias(resumo)
 
     st.divider()
-    _situacao(resumo)
+    _situacao_aluno()
+
+    st.divider()
+    _situacao_por_escola()
 
     st.divider()
     _escolas_atencao(resumo)

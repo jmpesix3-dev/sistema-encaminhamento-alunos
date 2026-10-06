@@ -264,6 +264,10 @@ def _aba_editar(filtro_status: str = None, filtro_destino: int = None,
 
     if filtro_status == "sem_vaga":
         st.info("Mostrando alunos **sem vaga** (nenhuma escola definida).")
+    elif filtro_status == "encaminhados":
+        st.info("Mostrando alunos **encaminhados** (com escola alocada).")
+    elif filtro_status == "info_pendente":
+        st.info("Mostrando alunos com **informação pendente** (sem endereço ou sem destino).")
     elif filtro_status in etapas:
         st.info(f"Mostrando alunos com status **{etapas[filtro_status]}**.")
     if filtro_origem:
@@ -301,6 +305,26 @@ def _aba_editar(filtro_status: str = None, filtro_destino: int = None,
                     limit=2000,
                 )
                 if a.allocated_school_id is None
+            ]
+        elif filtro_status == "encaminhados":
+            alunos = [
+                a for a in list_students(
+                    session,
+                    origin_school_id=f_origem["id"] if f_origem else None,
+                    destination_school_id=f_dest["id"] if f_dest else None,
+                    limit=2000,
+                )
+                if a.allocated_school_id is not None
+            ]
+        elif filtro_status == "info_pendente":
+            alunos = [
+                a for a in list_students(
+                    session,
+                    origin_school_id=f_origem["id"] if f_origem else None,
+                    destination_school_id=f_dest["id"] if f_dest else None,
+                    limit=2000,
+                )
+                if not a.address or not a.destination_school_1_id
             ]
         else:
             status = (para_valor_aluno(etapas[filtro_status])
