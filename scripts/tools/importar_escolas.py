@@ -8,7 +8,8 @@ from pathlib import Path
 
 import openpyxl
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+RAIZ = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(RAIZ))
 
 from encaminhamento.database import init_db, get_session
 from encaminhamento.database.crud import create_school, get_school_by_name, update_school
@@ -65,7 +66,13 @@ def separar_contato(texto):
 def main():
     init_db()
 
-    wb = openpyxl.load_workbook("escolas.xlsx", data_only=True)
+    caminho = RAIZ / "data" / "escolas.xlsx"
+    if not caminho.exists():
+        print(f"Arquivo nao encontrado: {caminho}")
+        print("Copie escolas.xlsx para a pasta data/ antes de rodar.")
+        return
+
+    wb = openpyxl.load_workbook(caminho, data_only=True)
     ws = wb.active
 
     # Descobre a linha do cabeÃ§alho
