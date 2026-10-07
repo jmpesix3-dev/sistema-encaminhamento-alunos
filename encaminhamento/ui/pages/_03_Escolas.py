@@ -405,8 +405,9 @@ def _aba_localizacao():
                 "distrito": e["distrito"],
             } for e in escolas if e["latitude"] is None]
 
-            barra = st.progress(0)
+            barra = st.progress(0.0)
             rotulo = st.empty()
+            log_placeholder = st.empty()
             registro = []
 
             def progresso(atual, total_, endereco, status, resultado=None):
@@ -419,8 +420,10 @@ def _aba_localizacao():
                 else:
                     rotulo.text(f"[{atual}/{total_}] {limpo}")
                     registro.append(f"[{atual}/{total_}] {limpo}")
-                with st.expander("Log", expanded=True):
-                    st.code("\n".join(registro[-8:]), language=None)
+
+                with log_placeholder:
+                    with st.expander("📋 Log", expanded=False):
+                        st.code("\n".join(registro[-8:]), language=None)
 
             geo.progresso = progresso
             resumo = geo.geocode_escolas(alvos)

@@ -379,6 +379,7 @@ def _aba_coordenadas(svc):
 
                     barra = st.progress(0)
                     rotulo = st.empty()
+                    log_placeholder = st.empty()
                     registro = []
 
                     def progresso(atual, total, endereco, status, resultado=None):
@@ -394,8 +395,9 @@ def _aba_coordenadas(svc):
                         else:
                             registro.append(f"[{atual}/{total}] {endereco[:45]}")
 
-                        with st.expander("Log da busca", expanded=False):
-                            st.code("\n".join(registro[-10:]), language=None)
+                        with log_placeholder:
+                            with st.expander("📋 Log da busca", expanded=False):
+                                st.code("\n".join(registro[-10:]), language=None)
 
                     geo.progresso = progresso
                     resumo = geo.geocode_alunos(alvos)
