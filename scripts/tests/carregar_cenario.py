@@ -136,6 +136,35 @@ def importar():
     return total
 
 
+def geolocalizar_escolas():
+    """Geolocaliza escolas de destino que ainda nao tem coordenada."""
+    geo = get_geocoding_service()
+    with get_session() as session:
+        alvos = [
+            {"id": e.id, "nome": e.name, "endereco": e.address or e.name, "distrito": e.distrito}
+            for e in list_schools(session)
+            if e.latitude is None and (e.is_destination or e.is_origin)
+        ]
+
+    if not alvos:
+        print("4. Todas as escolas ja tem coordenada.")
+        return
+
+    print(f"4. Geolocalizando {len(alvos)} escola(s)...")
+    resumo = geo.geocode_escolas(alvos)
+
+    gravadas = 0
+    for e in alvos:
+        if e.get("lat") is not None:
+            with get_session() as session:
+                update_school(session, e["id"], latitude=e["lat"], longitude=e["lon"])
+            gravadas += 1
+
+    niveis = ", ".join(f"{k}: {v}" for k, v in resumo["por_nivel"].items() if v)
+    print(f"   Gravadas: {gravadas} escola(s)")
+    print(f"   Precisao: {niveis}")
+
+
 def geolocalizar_alunos():
     geo = get_geocoding_service()
     with get_session() as session:
@@ -198,6 +227,7 @@ def main():
     limpar()
     definir_capacidades()
     importar()
+    geolocalizar_escolas()
     geolocalizar_alunos()
     alocar()
 
