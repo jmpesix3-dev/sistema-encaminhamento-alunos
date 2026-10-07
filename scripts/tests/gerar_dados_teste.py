@@ -246,6 +246,25 @@ def gerar_alunos():
     return alunos_criados
 
 
+def set_capacidades():
+    """Define capacidade nas escolas de destino para o cenario de teste."""
+    from encaminhamento.database.crud import list_schools, update_school
+    capacidades = {
+        "E. M. Manoel Nunes Barreto": 12,
+        "E. E. M. João Batista Alves": 10,
+        "E. M. Amaro de Souza Paes": 8,
+        "E. E. M. Luiz Gomes da Silva Neto": 10,
+        "E. E. M. Manoel Ducas de Brito": 8,
+        "E. E. M. Francisco Alves Toledo": 14,
+    }
+    with get_session() as s:
+        schools = list_schools(s, is_destination=True)
+        for escola in schools:
+            if escola.name in capacidades:
+                update_school(s, escola.id, oferta=capacidades[escola.name])
+    print(f"Capacidades definidas em {len(capacidades)} escolas de destino.")
+
+
 def main():
     init_db()
 
@@ -254,6 +273,7 @@ def main():
         total_antes = s.execute(select(func.count(Student.id))).scalar()
     print(f"Alunos antes: {total_antes}")
 
+    set_capacidades()
     gerar_alunos()
 
     total_depois = 0

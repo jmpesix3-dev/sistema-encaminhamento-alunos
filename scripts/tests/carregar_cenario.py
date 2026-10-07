@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from sqlalchemy import delete, func, select
 
+from encaminhamento.config import DATA_DIR, EXCEL_IMPORT_DIR
 from encaminhamento.database import init_db, get_session
 from encaminhamento.database.crud import (
     get_school_by_name, list_schools, list_students, list_batches,
@@ -30,7 +31,7 @@ from encaminhamento.services.excel_import import parse_modeloupload
 from encaminhamento.services.geocoding import get_geocoding_service
 from encaminhamento.utils.helpers import format_student_name, get_or_create_school_from_name
 
-PLANILHA = "modeloupload_teste.xlsx"
+PLANILHA = str(EXCEL_IMPORT_DIR / "modeloupload_teste.xlsx")
 
 # Capacidade por escola de destino (escolhida para forcar lotacao em uma)
 CAPACIDADES = {

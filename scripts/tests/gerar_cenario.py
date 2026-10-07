@@ -6,10 +6,19 @@ de origem, distribute entre varias escolas de destino (com excesso em uma,
 para testar a lotacao e o transbordo para a 2a opcao).
 
 Uso:  python gerar_cenario.py
+Salva em: data/import/modeloupload_teste.xlsx
 """
+import sys
 import random
+from pathlib import Path
+
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+
+RAIZ = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(RAIZ))
+
+from encaminhamento.config import EXCEL_IMPORT_DIR
 
 # ----------------------------------------------------------------------
 # Escolas de origem (turmas que vao encaminhar alunos)
@@ -215,7 +224,9 @@ def gerar_planilha(destino):
 
 if __name__ == "__main__":
     random.seed(7)  # resultado reproduzivel
-    caminho = gerar_planilha("modeloupload_teste.xlsx")
+    EXCEL_IMPORT_DIR.mkdir(exist_ok=True)
+    destino = str(EXCEL_IMPORT_DIR / "modeloupload_teste.xlsx")
+    caminho = gerar_planilha(destino)
     print(f"Planilha criada: {caminho}")
 
     wb = openpyxl.load_workbook(caminho)
