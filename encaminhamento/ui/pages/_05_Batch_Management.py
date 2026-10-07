@@ -30,9 +30,9 @@ def render():
     ir_status = st.session_state.pop("ir_lote_status", None)
     inicial = 1
     escolhida = seletor_abas(
-        ["➕ Criar Lote", "📋 Gerenciar Lotes"], inicial, chave="abas_lotes"
+        ["➕ Criar Lote", "📋 Gerenciar Lotes"], inicial, chave="abas_lotes",
+        forcar=bool(ir_status),
     )
-    # O widget guarda a aba antiga; nesta renderizacao a do filtro vale
     if ir_status:
         escolhida = inicial
 
@@ -389,6 +389,8 @@ def render():
                                     )
                                     if result.success:
                                         st.success(result.message)
+                                        st.session_state[f"send_email_batch_{batch.id}"] = False
+                                        st.rerun()
                                     else:
                                         st.error(f"Erro: {result.message} - {result.error}")
                                 else:
