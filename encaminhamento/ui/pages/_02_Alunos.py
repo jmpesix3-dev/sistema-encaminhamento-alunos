@@ -514,7 +514,7 @@ def render():
     else:
         inicial = 0
 
-    escolhida = seletor_abas(abas, inicial, chave="abas_alunos")
+    escolhida = seletor_abas(abas, inicial, chave="abas_alunos", forcar=redirecionado)
 
     # O widget guarda a aba anterior; na renderizacao que recebe o
     # filtro do painel, vale a aba pedida
