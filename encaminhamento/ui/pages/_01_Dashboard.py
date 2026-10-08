@@ -433,11 +433,32 @@ def _situacao_aluno():
                     else:
                         st.info("Nenhuma alteração detectada.")
 
-            if st.button(
-                "Ocultar", key=f"sit_aluno_occ_{chave}", use_container_width=True
-            ):
-                st.session_state.pop(f"sit_aluno_lista_{chave}", None)
-                st.rerun()
+            # Mapeia a chave do card para o filtro da pagina Alunos
+            filtro_alunos = {
+                "alunos": None,
+                "encaminhados": "encaminhados",
+                "pendente": "sem_vaga",
+                "info_pendente": "info_pendente",
+            }
+            filtro = filtro_alunos.get(chave)
+
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button(
+                    "📋 Ir para Alunos (filtro aplicado)",
+                    key=f"sit_aluno_ir_{chave}",
+                    use_container_width=True,
+                ):
+                    if filtro:
+                        ir_para("Alunos", aluno_status=filtro)
+                    else:
+                        ir_para("Alunos")
+            with c2:
+                if st.button(
+                    "Ocultar", key=f"sit_aluno_occ_{chave}", use_container_width=True
+                ):
+                    st.session_state.pop(f"sit_aluno_lista_{chave}", None)
+                    st.rerun()
 
 
 def _situacao(resumo):
