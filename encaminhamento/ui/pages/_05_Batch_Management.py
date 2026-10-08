@@ -343,6 +343,9 @@ def render():
                                 else:
                                     with get_session() as session:
                                         update_batch_status(session, batch_info["id"], BatchStatus.GENERATED, pdf_path)
+                                        for s in get_students_for_batch(session, batch_info["id"]):
+                                            from encaminhamento.services.status_tracker import transition_student_status
+                                            transition_student_status(s.id, StudentStatus.SENT)
                                     st.success("PDF gerado!")
                                     st.rerun()
                     
@@ -369,6 +372,9 @@ def render():
                             if st.button("🏁 Concluir", use_container_width=True, key=f"complete_{batch.id}"):
                                 with get_session() as session:
                                     update_batch_status(session, batch.id, BatchStatus.COMPLETED)
+                                    for s in get_students_for_batch(session, batch.id):
+                                        from encaminhamento.services.status_tracker import transition_student_status
+                                        transition_student_status(s.id, StudentStatus.CONFIRMED)
                                 st.success("Lote concluído!")
                                 st.rerun()
                     
