@@ -4,13 +4,13 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.colors import HexColor, black, white
 from reportlab.platypus import (
-    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,
+    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image,
 )
 from typing import List
 from encaminhamento.database.models import Student, School
 from encaminhamento.database.crud import get_students_for_batch
 from encaminhamento.database import get_session
-from encaminhamento.config import PDF_EXPORT_DIR
+from encaminhamento.config import PDF_EXPORT_DIR, DATA_DIR
 from encaminhamento.utils.arquivos import nome_seguro
 
 
@@ -93,11 +93,22 @@ def generate_batch_pdf(batch_id: int, output_path: str = None) -> str:
     
     elements = []
     
+    # Logo
+    logo_path = DATA_DIR / "logo_sjb.png"
+    if logo_path.exists():
+        elements.append(Image(str(logo_path), width=2.5*cm, height=2.5*cm, kind='proportional'))
+        elements.append(Spacer(1, 6))
+    
     # Title row
-    title_text = (
-        f"<b>Unidade Escolar de destino:</b> {destination_school_name}"
-        f"                     <b>Nº de alunos encaminhados:</b> {len(student_data)}      / Oferta 20"
-    )
+    class_name = batch.origin_class.name if batch.origin_class else ""
+    oferta = batch.destination_school.oferta if batch.destination_school else 0
+    header_parts = []
+    header_parts.append(f"<b>Unidade Escolar de destino:</b> {destination_school_name}")
+    if class_name:
+        header_parts.append(f"<b>Turma:</b> {class_name}")
+    header_parts.append(f"<b>Nº de alunos encaminhados:</b> {len(student_data)} / <b>Oferta:</b> {oferta}")
+    
+    title_text = "                     ".join(header_parts)
     elements.append(Paragraph(title_text, title_style))
     
     # Subtitle
