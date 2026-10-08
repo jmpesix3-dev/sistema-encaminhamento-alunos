@@ -3,7 +3,10 @@ import pandas as pd
 
 from encaminhamento.ui.components import sidebar_navigation, seletor_abas
 from encaminhamento.database import get_session
-from encaminhamento.database.crud import list_schools, list_students, update_student
+from encaminhamento.database.crud import (
+    list_schools, list_students, update_student,
+    create_batches_from_allocation,
+)
 from encaminhamento.database.models import StudentStatus
 from encaminhamento.services.allocation import get_allocation_service
 from encaminhamento.services.geocoding import get_geocoding_service
@@ -68,6 +71,12 @@ def _linhas_do_grupo(alunos):
                 "Prioridade": None,
             })
     return linhas
+
+
+def _criar_lotes_da_alocacao():
+    """Wrapper que chama a função central do CRUD."""
+    with get_session() as session:
+        return create_batches_from_allocation(session, notes="Criado automaticamente pela alocação")
 
 
 def _mostrar_resultado(resultado, titulo):
@@ -211,7 +220,7 @@ def render():
                 st.session_state["previa"] = resultado
                 st.success(
                     f"**{resultado.allocated} aluno(s) alocado(s)**, "
-        f"{resultado.sem_vaga} sem vaga."
+                    f"{resultado.sem_vaga} sem vaga."
                 )
 
         with col2:
@@ -223,6 +232,25 @@ def render():
 
         if "previa" in st.session_state and st.session_state["previa"].allocated:
             _mostrar_resultado(st.session_state["previa"], "Último resultado")
+
+        # Botão de criar lotes: aparece sempre que houver alunos alocados no banco
+        if stats["allocated"] > 0:
+            st.divider()
+            if st.button("📦 Criar/Atualizar Lotes com alunos alocados", type="primary", use_container_width=True):
+                with st.spinner("Criando lotes..."):
+                    resultado = _criar_lotes_da_alocacao()
+                lotes_criados = resultado["lotes_criados"]
+                lotes_atualizados = resultado["lotes_atualizados"]
+                alunos_adicionados = resultado["alunos_adicionados"]
+                if lotes_criados > 0 or alunos_adicionados > 0:
+                    st.success(
+                        f"✅ {lotes_criados} lote(s) novo(s), "
+                        f"{lotes_atualizados} atualizado(s), "
+                        f"{alunos_adicionados} aluno(s) adicionado(s)!"
+                    )
+                else:
+                    st.info("Nenhum aluno alocado pendente de lote.")
+                st.rerun()
 
     # -----------------------------------------------------------------
     # COORDENADAS

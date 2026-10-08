@@ -127,7 +127,7 @@ class ForwardingBatch(Base):
     __tablename__ = "forwarding_batches"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    origin_school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
+    origin_school_id = Column(Integer, ForeignKey("schools.id"), nullable=True)
     destination_school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
     origin_class_id = Column(Integer, ForeignKey("classes.id"), nullable=True)
     year = Column(Integer, nullable=False)

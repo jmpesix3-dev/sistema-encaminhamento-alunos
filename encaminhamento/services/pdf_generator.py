@@ -26,11 +26,11 @@ def generate_batch_pdf(batch_id: int, output_path: str = None) -> str:
         if not students:
             raise ValueError(f"No students in batch {batch_id}")
         
-        # Extract all needed data while session is open
         destination_school_name = batch.destination_school.name if batch.destination_school else ""
-        origin_school_name = batch.origin_school.name if batch.origin_school else ""
-        class_name = batch.origin_class.name if batch.origin_class else ""
-        student_data = [(s.name, s.full_address) for s in students]
+        student_data = []
+        for s in students:
+            origin_name = s.origin_school.name if s.origin_school else ""
+            student_data.append((s.name, s.full_address, origin_name))
     
     if output_path is None:
         output_path = PDF_EXPORT_DIR / f"encaminhamento_batch_{batch_id}.pdf"
@@ -96,25 +96,24 @@ def generate_batch_pdf(batch_id: int, output_path: str = None) -> str:
     # Title row
     title_text = (
         f"<b>Unidade Escolar de destino:</b> {destination_school_name}"
-        f"                     <b>Turma:</b>  {class_name}"
-        f"                                                                  <b>Nº de alunos encaminhados:</b> {len(student_data)}      / Oferta 20"
+        f"                     <b>Nº de alunos encaminhados:</b> {len(student_data)}      / Oferta 20"
     )
     elements.append(Paragraph(title_text, title_style))
     
     # Subtitle
-    elements.append(Paragraph("QUADRO DE ENCAMHAMENTO DE ALUNOS 2025", subtitle_style))
+    elements.append(Paragraph("QUADRO DE ENCAMINHAMENTO DE ALUNOS 2025", subtitle_style))
     elements.append(Spacer(1, 6))
     
     # Table data
     headers = ["Nº", "NOME DO ALUNO", "ENDEREÇO", "UNIDADE DE ORIGEM"]
     
     table_data = [headers]
-    for idx, (name, address) in enumerate(student_data, 1):
+    for idx, (name, address, origin_name) in enumerate(student_data, 1):
         table_data.append([
             str(idx),
             name,
             address,
-            origin_school_name
+            origin_name
         ])
     
     # Column widths for landscape A4

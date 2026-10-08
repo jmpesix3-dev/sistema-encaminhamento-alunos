@@ -156,8 +156,9 @@ def delete_student(session: Session, student_id: int) -> bool:
 
 
 # Batch CRUD
-def create_batch(session: Session, origin_school_id: int, destination_school_id: int,
-                 year: int, origin_class_id: int = None,
+def create_batch(session: Session, destination_school_id: int,
+                 year: int, origin_school_id: int = None,
+                 origin_class_id: int = None,
                  notes: str = None) -> ForwardingBatch:
     batch = ForwardingBatch(
         origin_school_id=origin_school_id,
@@ -169,6 +170,82 @@ def create_batch(session: Session, origin_school_id: int, destination_school_id:
     session.add(batch)
     session.flush()
     return batch
+
+
+def get_or_create_batch(session: Session, destination_school_id: int,
+                        year: int, origin_school_id: int = None,
+                        origin_class_id: int = None,
+                        notes: str = None) -> ForwardingBatch:
+    existing = session.execute(
+        select(ForwardingBatch).where(
+            ForwardingBatch.destination_school_id == destination_school_id,
+            ForwardingBatch.year == year,
+            ForwardingBatch.origin_class_id == origin_class_id,
+            ForwardingBatch.status.in_([BatchStatus.DRAFT])
+        )
+    ).scalar_one_or_none()
+
+    if existing:
+        if notes and notes.strip():
+            existing.notes = notes.strip()
+        return existing
+
+    batch = ForwardingBatch(
+        origin_school_id=origin_school_id,
+        destination_school_id=destination_school_id,
+        origin_class_id=origin_class_id,
+        year=year,
+        notes=notes
+    )
+    session.add(batch)
+    session.flush()
+    return batch
+
+
+def create_batches_from_allocation(session: Session, notes: str = None) -> dict:
+    """Agrupa alunos alocados por escola de destino + ano e cria/atualiza lotes.
+
+    Retorna dict com:
+      lotes_criados: número de lotes NOVOS criados
+      lotes_atualizados: número de lotes existentes que receberam alunos
+      alunos_adicionados: total de alunos adicionados a lotes
+    """
+    alocados = session.query(Student).filter(
+        Student.allocated_school_id.isnot(None),
+    ).all()
+
+    if not alocados:
+        return {"lotes_criados": 0, "lotes_atualizados": 0, "alunos_adicionados": 0}
+
+    grupos = {}
+    for a in alocados:
+        ano = a.origin_class.year if a.origin_class else 2025
+        chave = (a.allocated_school_id, ano)
+        grupos.setdefault(chave, []).append(a.id)
+
+    lotes_criados = 0
+    lotes_atualizados = 0
+    alunos_adicionados = 0
+    for (destino_id, ano), ids in grupos.items():
+        batch = get_or_create_batch(
+            session,
+            destination_school_id=destino_id,
+            year=ano,
+            origin_school_id=None,
+            notes=notes,
+        )
+        if batch.student_count == 0:
+            lotes_criados += 1
+        else:
+            lotes_atualizados += 1
+        add_students_to_batch(session, batch.id, ids)
+        alunos_adicionados += len(ids)
+
+    return {
+        "lotes_criados": lotes_criados,
+        "lotes_atualizados": lotes_atualizados,
+        "alunos_adicionados": alunos_adicionados,
+    }
 
 
 def get_batch(session: Session, batch_id: int) -> Optional[ForwardingBatch]:

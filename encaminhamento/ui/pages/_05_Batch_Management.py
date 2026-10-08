@@ -9,9 +9,10 @@ from encaminhamento.ui.components import (
 )
 from encaminhamento.database import get_session
 from encaminhamento.database.crud import (
-    list_schools, list_students, list_batches, create_batch,
-    get_batch, add_students_to_batch,
+    list_schools, list_students, list_batches,
+    get_batch, get_or_create_batch, add_students_to_batch,
     get_students_for_batch, update_batch_status,
+    create_batches_from_allocation,
 )
 from encaminhamento.database.models import (
     BatchStatus, Student, StudentStatus,
@@ -160,13 +161,13 @@ def render():
                 if selected_ids:
                     st.info(f"{len(selected_ids)} aluno(s) selecionado(s)")
                     
-                    if st.button("📦 Criar Lote com Selecionados", type="primary", use_container_width=True):
+                    if st.button("📦 Criar/Atualizar Lote", type="primary", use_container_width=True):
                         with get_session() as session:
-                            batch = create_batch(
+                            batch = get_or_create_batch(
                                 session,
-                                origin_school_id=origin_school_id,
                                 destination_school_id=dest_school_id,
                                 year=year,
+                                origin_school_id=origin_school_id,
                                 origin_class_id=origin_class.id if origin_class else None,
                                 notes=notes
                             )
@@ -177,7 +178,7 @@ def render():
                                 from encaminhamento.services.status_tracker import transition_student_status
                                 transition_student_status(sid, StudentStatus.PENDING)
                         
-                        st.success(f"✅ Lote #{batch.id} criado com {len(selected_ids)} aluno(s)!")
+                        st.success(f"✅ Lote #{batch.id} atualizado com {len(selected_ids)} aluno(s)!")
                         st.rerun()
                 else:
                     st.button("📦 Criar Lote", disabled=True, use_container_width=True)
@@ -188,6 +189,24 @@ def render():
     
     elif escolhida == 1:
         st.subheader("Lotes Existentes")
+
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.caption("Visualize e gerencie os lotes existentes.")
+        with col2:
+            with get_session() as session:
+                qtd_alocados = session.query(Student).filter(
+                    Student.allocated_school_id.isnot(None)
+                ).count()
+            if qtd_alocados > 0 and st.button("📦 Criar Lotes da Alocação", use_container_width=True):
+                with get_session() as session:
+                    res = create_batches_from_allocation(session, notes="Criado a partir da alocação automática")
+                st.success(
+                    f"✅ {res['lotes_criados']} novo(s), "
+                    f"{res['lotes_atualizados']} atualizado(s), "
+                    f"{res['alunos_adicionados']} aluno(s)!"
+                )
+                st.rerun()
 
         # Filtros
         col1, col2, col3, col4 = st.columns(4)
