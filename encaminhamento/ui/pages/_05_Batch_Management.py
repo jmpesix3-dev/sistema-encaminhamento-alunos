@@ -42,6 +42,7 @@ def render():
         
         col1, col2 = st.columns(2)
         
+        default_year = 2025
         with col1:
             origin_school = school_selector(
                 "Escola de Origem *",
@@ -50,8 +51,7 @@ def render():
                 allow_new=False
             )
             
-            year = st.number_input("Ano Letivo *", value=2025, min_value=2020, max_value=2030, key="batch_year")
-            
+            origin_class = None
             if origin_school:
                 origin_school_id = origin_school["id"]
                 with get_session() as session:
@@ -68,9 +68,22 @@ def render():
                         key="batch_origin_class"
                     )
                     origin_class = class_options[selected_class]
+                    
+                    # Ano de encaminhamento = ano de recebimento (turma) + 1
+                    if origin_class:
+                        default_year = origin_class.year + 1
                 else:
                     origin_class = None
                     st.info("Nenhuma turma cadastrada")
+            
+            year = st.number_input(
+                "Ano de Encaminhamento *",
+                value=default_year,
+                min_value=2020,
+                max_value=2030,
+                key="batch_year",
+                help="Ano alvo do encaminhamento = ano de recebimento da turma + 1 (ex.: 2026 -> 2027)",
+            )
         
         with col2:
             dest_school = school_selector(
@@ -140,7 +153,7 @@ def render():
                         "ID": s.id,
                         "Nome": s.name,
                         "Endereço": s.full_address,
-                        "Status": rotulo_aluno(s.status),
+                        "Status": "Encaminhado" if s.allocated_school_id else "Pendente",
                         "Turma": s.origin_class.name if s.origin_class else "",
                     })
                 
@@ -290,7 +303,7 @@ def render():
                                 "Nº": idx,
                                 "Nome": s.name,
                                 "Endereço": s.full_address,
-                                "Status": rotulo_aluno(s.status),
+"Status": rotulo_aluno(s.status),
                             })
                         
                         # Store in session state for use outside session

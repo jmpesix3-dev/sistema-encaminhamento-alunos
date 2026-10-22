@@ -493,9 +493,9 @@ def test_situacao_aluno(data):
     check("contar has info_pendente key", "info_pendente" in counts)
 
     check("alunos = 21", counts["alunos"] == 21, f"got {counts['alunos']}")
-    check("encaminhados + pendente = alunos",
-          counts["encaminhados"] + counts["pendente"] == counts["alunos"],
-          f"enc={counts['encaminhados']}, pend={counts['pendente']}")
+    check("encaminhados + pendente + info_pendente = alunos",
+          counts["encaminhados"] + counts["pendente"] + counts["info_pendente"] == counts["alunos"],
+          f"enc={counts['encaminhados']}, pend={counts['pendente']}, info={counts['info_pendente']}")
 
     # Method 2: detalhar_situacao_aluno() for each category
     for chave, label, _ in SITUACAO_ALUNO:
@@ -508,10 +508,29 @@ def test_situacao_aluno(data):
             check(f"detalhar({chave}) count = encaminhados",
                   len(rows) == counts["encaminhados"],
                   f"detalhar={len(rows)}, contador={counts['encaminhados']}")
+            check("encaminhados show Status=Encaminhado",
+                  len(rows) == 0 or all(r["Status"] == "Encaminhado" for r in rows),
+                  f"got {[r['Status'] for r in rows][:5]}")
+            check("encaminhados have empty Pendência",
+                  all(r["Pendência"] == "" for r in rows),
+                  f"got {[r['Pendência'] for r in rows if r['Pendência']][:3]}")
         elif chave == "pendente":
             check(f"detalhar({chave}) count = pendente",
                   len(rows) == counts["pendente"],
                   f"detalhar={len(rows)}, contador={counts['pendente']}")
+            check("pendente show Status=Pendente",
+                  len(rows) == 0 or all(r["Status"] == "Pendente" for r in rows),
+                  f"got {[r['Status'] for r in rows][:5]}")
+            check("unallocated pendente have reason in Pendência",
+                  all(r["Pendência"] != "" for r in rows),
+                  f"got {[r['Pendência'] for r in rows][:3]}")
+        elif chave == "info_pendente":
+            check("info_pendente show Status=Pendente",
+                  len(rows) == 0 or all(r["Status"] == "Pendente" for r in rows),
+                  f"got {[r['Status'] for r in rows][:5]}")
+            check("info_pendente have reason in Pendência",
+                  all(r["Pendência"] != "" for r in rows),
+                  f"got {[r['Pendência'] for r in rows][:3]}")
 
     # Method 3: Cross-check with montar_resumo()
     resumo = montar_resumo()
@@ -537,6 +556,9 @@ def test_situacao_aluno(data):
     # + Group F (2 students, no destination) = 6 info_pendente minimum
     rows_info = detalhar_situacao_aluno("info_pendente")
     check("info_pendente >= 6", len(rows_info) >= 6, f"got {len(rows_info)}")
+    check("info_pendente Pendência populated",
+          all(r.get("Pendência") for r in rows_info),
+          f"got {[r.get('Pendência') for r in rows_info][:3]}")
 
     return resumo, counts
 
@@ -554,7 +576,7 @@ def test_pendencias(resumo):
     # Each pendencia should have a valid categoria
     valid_keys = {
         "escolas_sem_capacidade", "escolas_sem_geo", "alunos_sem_coordenada",
-        "alunos_sem_vaga", "alunos_sem_segunda", "lotes_sem_pdf",
+        "alunos_sem_vaga", "alunos_info_pendente", "alunos_sem_segunda", "lotes_sem_pdf",
         "lotes_nao_enviados", "escolas_sobrecarregadas", "escolas_ociosas",
         "atualizacao",
     }

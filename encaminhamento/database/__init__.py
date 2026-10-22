@@ -36,6 +36,14 @@ def init_db() -> None:
             dbapi_conn.execute("PRAGMA busy_timeout=5000")
     Base.metadata.create_all(bind=engine)
 
+    # Sincroniza status de aluno com a alocacao existente: alunos alocados
+    # presos como Rascunho passam a Pendente; sem alocacao como Pendente
+    # voltam a Rascunho. Idempotente e seguro em banco vazio.
+    from encaminhamento.database.crud import sync_status_aluno_por_alocacao
+
+    with get_session() as session:
+        sync_status_aluno_por_alocacao(session)
+
 
 @contextmanager
 def get_session() -> Generator[Session, None, None]:

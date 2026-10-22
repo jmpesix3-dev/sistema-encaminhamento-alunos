@@ -4,7 +4,7 @@ from sqlalchemy import select, or_
 from sqlalchemy.orm import Session, joinedload
 from encaminhamento.database.models import (
     School, Class, Student, ForwardingBatch, BatchItem,
-    StudentStatus, BatchStatus
+    StudentStatus, BatchStatus, SentEmail
 )
 
 
@@ -147,6 +147,64 @@ def update_student(session: Session, student_id: int, **kwargs) -> Optional[Stud
     return student
 
 
+def sync_status_aluno_por_alocacao(session: Session) -> int:
+    """
+    Sincroniza Student.status com a existencia de alocacao (allocated_school_id).
+
+    - alocado (allocated_school_id preenchido) mas status = draft  -> pendente
+      (deveria mostrar "Pendente", nao "Rascunho")
+    - sem alocacao (allocated_school_id NULL) mas status = pending -> draft
+      (deveria mostrar "Rascunho", nao "Pendente")
+    - sem alocacao (allocated_school_id NULL) e status = draft      -> pendente
+      (o dashboard conta esses alunos como "pendente"; eles devem
+       exibir "Pendente" na lista em vez de "Rascunho")
+
+    Devolve quantos alunos tiveram o status ajustado.
+    """
+    from sqlalchemy import update
+
+    ajustados = 0
+
+    stmt1 = (
+        update(Student)
+        .where(
+            Student.allocated_school_id.isnot(None),
+            Student.status == StudentStatus.DRAFT,
+        )
+        .values(status=StudentStatus.PENDING)
+        .execution_options(synchronize_session=False)
+    )
+    r1 = session.execute(stmt1)
+    ajustados += r1.rowcount or 0
+
+    stmt2 = (
+        update(Student)
+        .where(
+            Student.allocated_school_id.is_(None),
+            Student.status == StudentStatus.PENDING,
+        )
+        .values(status=StudentStatus.DRAFT)
+        .execution_options(synchronize_session=False)
+    )
+    r2 = session.execute(stmt2)
+    ajustados += r2.rowcount or 0
+
+    stmt3 = (
+        update(Student)
+        .where(
+            Student.allocated_school_id.is_(None),
+            Student.status == StudentStatus.DRAFT,
+        )
+        .values(status=StudentStatus.PENDING)
+        .execution_options(synchronize_session=False)
+    )
+    r3 = session.execute(stmt3)
+    ajustados += r3.rowcount or 0
+
+    session.flush()
+    return ajustados
+
+
 def delete_student(session: Session, student_id: int) -> bool:
     student = session.get(Student, student_id)
     if student:
@@ -203,34 +261,49 @@ def get_or_create_batch(session: Session, destination_school_id: int,
 
 
 def create_batches_from_allocation(session: Session, notes: str = None) -> dict:
-    """Agrupa alunos alocados por escola de destino + ano e cria/atualiza lotes.
+    """Agrupa alunos alocados por escola de destino + ano de encaminhamento.
+
+    O ano do lote e' o ano alvo do encaminhamento = ano de recebimento
+    (origin_class.year) + 1. Ex.: alunos recebidos em 2026 vao para lotes
+    com year=2027.
+
+    Alunos sem turma ou sem ano na turma sao pulados (contados em
+    alunos_sem_ano).
 
     Retorna dict com:
-      lotes_criados: número de lotes NOVOS criados
-      lotes_atualizados: número de lotes existentes que receberam alunos
+      lotes_criados: numero de lotes NOVOS criados
+      lotes_atualizados: numero de lotes existentes que receberam alunos
       alunos_adicionados: total de alunos adicionados a lotes
+      alunos_sem_ano: alunos pulados por nao ter ano de recebimento derivavel
     """
     alocados = session.query(Student).filter(
         Student.allocated_school_id.isnot(None),
     ).all()
 
     if not alocados:
-        return {"lotes_criados": 0, "lotes_atualizados": 0, "alunos_adicionados": 0}
+        return {
+            "lotes_criados": 0, "lotes_atualizados": 0,
+            "alunos_adicionados": 0, "alunos_sem_ano": 0,
+        }
 
     grupos = {}
+    alunos_sem_ano = 0
     for a in alocados:
-        ano = a.origin_class.year if a.origin_class else 2025
-        chave = (a.allocated_school_id, ano)
+        if not a.origin_class or not a.origin_class.year:
+            alunos_sem_ano += 1
+            continue
+        ano_encaminhamento = a.origin_class.year + 1
+        chave = (a.allocated_school_id, ano_encaminhamento)
         grupos.setdefault(chave, []).append(a.id)
 
     lotes_criados = 0
     lotes_atualizados = 0
     alunos_adicionados = 0
-    for (destino_id, ano), ids in grupos.items():
+    for (destino_id, ano_encaminhamento), ids in grupos.items():
         batch = get_or_create_batch(
             session,
             destination_school_id=destino_id,
-            year=ano,
+            year=ano_encaminhamento,
             origin_school_id=None,
             notes=notes,
         )
@@ -245,6 +318,7 @@ def create_batches_from_allocation(session: Session, notes: str = None) -> dict:
         "lotes_criados": lotes_criados,
         "lotes_atualizados": lotes_atualizados,
         "alunos_adicionados": alunos_adicionados,
+        "alunos_sem_ano": alunos_sem_ano,
     }
 
 
@@ -338,3 +412,34 @@ def find_or_create_school(session: Session, name: str, **defaults) -> School:
     if not school:
         school = create_school(session, name, **defaults)
     return school
+
+
+# Sent email log
+def create_sent_email(session: Session, batch_id: Optional[int], to_emails: List[str],
+                      cc_emails: List[str], subject: str, pdf_attached: bool,
+                      success: bool, error_message: str = None) -> SentEmail:
+    record = SentEmail(
+        batch_id=batch_id,
+        to_emails=", ".join(to_emails),
+        cc_emails=", ".join(cc_emails) if cc_emails else None,
+        subject=subject,
+        pdf_attached=pdf_attached,
+        success=success,
+        error_message=error_message,
+    )
+    session.add(record)
+    session.commit()
+    session.refresh(record)
+    return record
+
+
+def list_sent_emails(session: Session, limit: int = 50) -> List[SentEmail]:
+    stmt = (
+        select(SentEmail)
+        .options(
+            joinedload(SentEmail.batch).joinedload(ForwardingBatch.destination_school)
+        )
+        .order_by(SentEmail.sent_at.desc())
+        .limit(limit)
+    )
+    return session.execute(stmt).unique().scalars().all()

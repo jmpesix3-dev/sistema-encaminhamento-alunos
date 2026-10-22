@@ -153,16 +153,18 @@ def send_batch_notification(
         origin_school = batch.origin_school
         class_name = batch.origin_class.name if batch.origin_class else ""
         student_count = batch.student_count
-    
+        dest_name = destination_school.name if destination_school else "—"
+        origin_name = origin_school.name if origin_school else "—"
+
     from encaminhamento.config import NOME_SISTEMA
 
-    subject = f"{NOME_SISTEMA} - {destination_school.name} - {student_count} alunos"
+    subject = f"{NOME_SISTEMA} - {dest_name} - {student_count} alunos"
 
     body_text = f"""
 {NOME_SISTEMA}
 
-Unidade Escolar de Destino: {destination_school.name}
-Unidade Escolar de Origem: {origin_school.name}
+Unidade Escolar de Destino: {dest_name}
+Unidade Escolar de Origem: {origin_name}
 Turma: {class_name}
 Número de Alunos: {student_count}
 
@@ -177,8 +179,8 @@ Atenciosamente,
 <body>
 <h2>{NOME_SISTEMA}</h2>
 <table>
-<tr><td><b>Unidade Escolar de Destino:</b></td><td>{destination_school.name}</td></tr>
-<tr><td><b>Unidade Escolar de Origem:</b></td><td>{origin_school.name}</td></tr>
+<tr><td><b>Unidade Escolar de Destino:</b></td><td>{dest_name}</td></tr>
+<tr><td><b>Unidade Escolar de Origem:</b></td><td>{origin_name}</td></tr>
 <tr><td><b>Turma:</b></td><td>{class_name}</td></tr>
 <tr><td><b>Número de Alunos:</b></td><td>{student_count}</td></tr>
 </table>

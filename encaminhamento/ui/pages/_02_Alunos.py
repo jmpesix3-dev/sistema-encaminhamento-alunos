@@ -273,7 +273,11 @@ def _aba_editar(filtro_status: str = None, filtro_destino: int = None,
     if filtro_origem:
         st.info("Mostrando alunos de uma escola de origem especifica.")
 
-    col1, col2, col3 = st.columns(3)
+    with get_session() as session:
+        classes = list_classes(session)
+    anos_disponiveis = sorted({c.year + 1 for c in classes if c.year})
+
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         f_origem = school_selector(
             "Escola de origem", key="ed_origem", is_origin=True,
@@ -291,6 +295,13 @@ def _aba_editar(filtro_status: str = None, filtro_destino: int = None,
             st.session_state["ed_status"] = etapas[filtro_status]
         f_status = st.selectbox(
             "Status", ["Todos"] + opcoes_aluno(), key="ed_status"
+        )
+    with col4:
+        ano_enc = st.selectbox(
+            "Ano encaminhamento",
+            ["Todos"] + [str(a) for a in anos_disponiveis],
+            key="ed_ano",
+            help="Recebidos em X sao encaminhados em X+1 (ex.: 2026 -> 2027).",
         )
 
     busca = st.text_input("Buscar por nome", key="ed_busca")
@@ -324,7 +335,12 @@ def _aba_editar(filtro_status: str = None, filtro_destino: int = None,
                     destination_school_id=f_dest["id"] if f_dest else None,
                     limit=2000,
                 )
-                if not a.address or not a.destination_school_1_id
+                if a.allocated_school_id is None and (
+                    not a.address
+                    or not a.address.strip()
+                    or not a.destination_school_1_id
+                    or not a.destination_school_2_id
+                )
             ]
         else:
             status = (para_valor_aluno(etapas[filtro_status])
@@ -338,18 +354,41 @@ def _aba_editar(filtro_status: str = None, filtro_destino: int = None,
                 search=busca or None,
                 limit=1000,
             )
-        rows = [{
-            "ID": a.id,
-            "Nome": a.name,
-            "Nome Civil": a.civil_name or "",
-            "Endereço": a.address or "",
-            "Turma": a.origin_class.name if a.origin_class else "",
-            "Destino 1": a.destination_school_1.name if a.destination_school_1 else "",
-            "Destino 2": a.destination_school_2.name if a.destination_school_2 else "",
-            "Status": rotulo_aluno(a.status),
-            "Alocado em": a.allocated_school.name if a.allocated_school else "",
-            "Assinatura": bool(a.responsible_signature),
-        } for a in alunos]
+        if ano_enc and ano_enc != "Todos":
+            alunos = [
+                a for a in alunos
+                if a.origin_class and a.origin_class.year
+                and a.origin_class.year + 1 == int(ano_enc)
+            ]
+        rows = []
+        for a in alunos:
+            if a.allocated_school_id:
+                pendencia_str = ""
+            else:
+                motivos = []
+                if not a.address or not a.address.strip():
+                    motivos.append("Endereço ausente")
+                if not a.destination_school_1_id:
+                    motivos.append("Sem 1ª opção")
+                if not a.destination_school_2_id:
+                    motivos.append("Sem 2ª opção")
+                if not motivos:
+                    motivos.append("Sem vaga / Opções lotadas")
+                pendencia_str = "; ".join(motivos)
+
+            rows.append({
+                "ID": a.id,
+                "Nome": a.name,
+                "Nome Civil": a.civil_name or "",
+                "Endereço": a.address or "",
+                "Turma": a.origin_class.name if a.origin_class else "",
+                "Destino 1": a.destination_school_1.name if a.destination_school_1 else "",
+                "Destino 2": a.destination_school_2.name if a.destination_school_2 else "",
+                "Status": "Encaminhado" if a.allocated_school_id else "Pendente",
+                "Alocado em": a.allocated_school.name if a.allocated_school else "",
+                "Assinatura": bool(a.responsible_signature),
+                "Pendência": pendencia_str,
+            })
 
     if not rows:
         st.info("Nenhum aluno encontrado com os filtros atuais.")
@@ -367,15 +406,14 @@ def _aba_editar(filtro_status: str = None, filtro_destino: int = None,
             "ID": st.column_config.NumberColumn("ID", disabled=True),
             "Turma": st.column_config.TextColumn("Turma", disabled=True),
             "Alocado em": st.column_config.TextColumn("Alocado em", disabled=True),
-            "Status": st.column_config.SelectboxColumn(
-                "Status", options=opcoes_aluno(), required=True
-            ),
+            "Status": st.column_config.TextColumn("Status", disabled=True, width="small"),
             "Assinatura": st.column_config.CheckboxColumn("Assinatura"),
+            "Pendência": st.column_config.TextColumn("Pendência", disabled=True, width="medium"),
         },
         key="ed_grid",
     )
 
-    c1, c2 = st.columns(2)
+    c1, c2, c3 = st.columns(3)
 
     with c1:
         if st.button("💾 Salvar alterações", type="primary", use_container_width=True):
@@ -398,7 +436,6 @@ def _aba_editar(filtro_status: str = None, filtro_destino: int = None,
                         address=row["Endereço"],
                         destination_school_1_id=get_or_create_school_from_name(d1, is_destination=True) if d1 else None,
                         destination_school_2_id=get_or_create_school_from_name(d2, is_destination=True) if d2 else None,
-                        status=para_valor_aluno(row["Status"]),
                         responsible_signature=bool(row["Assinatura"]),
                     )
                 mudancas += 1
@@ -418,7 +455,24 @@ def _aba_editar(filtro_status: str = None, filtro_destino: int = None,
             with get_session() as session:
                 for sid in excluir:
                     delete_student(session, sid)
+                session.commit()
             st.success(f"{len(excluir)} aluno(s) excluído(s).")
+            st.rerun()
+
+    with c3:
+        st.caption("Resetar alocações e lotes:")
+        reset_ano = st.selectbox(
+            "Ano para resetar",
+            ["Todos"] + [str(a) for a in anos_disponiveis],
+            key="ed_reset_ano",
+            label_visibility="collapsed",
+        )
+        if st.button("↩️ Resetar alocações", use_container_width=True):
+            from encaminhamento.services.allocation import AllocationService
+            svc = AllocationService()
+            ano_val = int(reset_ano) if (reset_ano and reset_ano != "Todos") else None
+            qtd = svc.reset_allocations(ano_encaminhamento=ano_val)
+            st.success(f"{qtd} aluno(s) resetado(s) para o estado inicial.")
             st.rerun()
 
 

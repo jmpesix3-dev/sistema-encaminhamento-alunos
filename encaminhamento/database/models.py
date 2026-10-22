@@ -167,3 +167,22 @@ class BatchItem(Base):
 
     def __repr__(self):
         return f"<BatchItem(batch_id={self.batch_id}, student_id={self.student_id}, seq={self.sequence_number})>"
+
+
+class SentEmail(Base):
+    __tablename__ = "sent_emails"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    batch_id = Column(Integer, ForeignKey("forwarding_batches.id"), nullable=True)
+    to_emails = Column(Text, nullable=False)
+    cc_emails = Column(Text, nullable=True)
+    subject = Column(String(300), nullable=False)
+    pdf_attached = Column(Boolean, default=False, nullable=False)
+    success = Column(Boolean, default=False, nullable=False)
+    error_message = Column(Text, nullable=True)
+    sent_at = Column(DateTime, default=func.now(), nullable=False)
+
+    batch = relationship("ForwardingBatch", foreign_keys=[batch_id])
+
+    def __repr__(self):
+        return f"<SentEmail(id={self.id}, batch_id={self.batch_id}, success={self.success})>"

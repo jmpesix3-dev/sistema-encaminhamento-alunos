@@ -514,14 +514,15 @@ def _painel_mapa(escolas, escola_id):
     if escola["latitude"] is not None:
         st.caption(f"Posição salva: {escola['latitude']:.6f}, {escola['longitude']:.6f}")
 
-    # pin escolhido na ultima interacao
+    # pin escolhido na ultima interacao (fonte de verdade para salvar)
     pin = st.session_state.get(f"pin_escola_{escola_id}")
     demais = [e for e in escolas if e["id"] != escola_id]
     nova = _mapa_ajuste(dict(escola, demais=demais, pin=pin))
 
-    # guarda para o proximo rerun
+    # guarda para o proximo rerun quando houver novo clique/desenho
     if nova:
         st.session_state[f"pin_escola_{escola_id}"] = nova
+        pin = nova
 
     c1, c2 = st.columns([3, 1])
 
@@ -533,9 +534,9 @@ def _painel_mapa(escolas, escola_id):
         )
 
     with c2:
-        if nova:
-            ok, msg = validar_coordenada(*nova)
-            st.write(f"📍 **{nova[0]:.6f}, {nova[1]:.6f}**")
+        if pin:
+            ok, msg = validar_coordenada(*pin)
+            st.write(f"📍 **{pin[0]:.6f}, {pin[1]:.6f}**")
             if not ok:
                 st.error(msg)
             if st.button("💾 Salvar posição", type="primary", use_container_width=True):
@@ -544,7 +545,7 @@ def _painel_mapa(escolas, escola_id):
                 else:
                     with get_session() as session:
                         update_school(session, escola["id"],
-                                      latitude=nova[0], longitude=nova[1])
+                                      latitude=pin[0], longitude=pin[1])
                     st.session_state.pop(f"pin_escola_{escola_id}", None)
                     st.success(f"Posição de {escola['nome']} atualizada.")
                     st.rerun()

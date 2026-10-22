@@ -1,14 +1,16 @@
 import streamlit as st
+import pandas as pd
+from pathlib import Path
 from encaminhamento.utils.status import rotulo_aluno, rotulo_lote
-from encaminhamento.utils.helpers import parse_email_list
+from encaminhamento.utils.helpers import validar_emails
 from encaminhamento.ui.components import sidebar_navigation, seletor_abas
 from encaminhamento.database import get_session
-from encaminhamento.database.crud import list_batches, list_schools
+from encaminhamento.database.crud import list_batches, list_schools, create_sent_email, list_sent_emails
 from encaminhamento.database.models import BatchStatus
 from encaminhamento.services.pdf_generator import generate_batch_pdf
 from encaminhamento.services.email_sender import send_batch_notification, test_smtp_connection, EmailResult
 from encaminhamento.services.status_tracker import get_status_summary, auto_advance_batch_status, bulk_transition_students
-from encaminhamento.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_USE_TLS, EMAIL_FROM
+from encaminhamento.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_USE_TLS, EMAIL_FROM, NOME_SISTEMA
 
 
 def render():
@@ -19,7 +21,7 @@ def render():
     
     # Aba enviada pelo painel
     ir_email = st.session_state.pop("ir_email", False)
-    abas = ["📄 PDFs", "📧 Emails", "🔄 Status", "🔧 Configuração"]
+    abas = ["📄 PDFs", "📧 Emails", "🔧 Status & Configuração"]
     inicial = 1 if ir_email else 0
     
     escolhida = seletor_abas(abas, inicial, chave="abas_automacao")
@@ -43,7 +45,7 @@ def render():
                     from encaminhamento.database.crud import get_batch
                     batch = get_batch(session, b.id)
                     if batch:
-                        label = f"Lote #{batch.id} - {batch.destination_school.name} ({batch.student_count} alunos) - {rotulo_lote(batch.status)}"
+                        label = f"Lote #{batch.id} - {batch.destination_school.name if batch.destination_school else '—'} ({batch.student_count} alunos) - {rotulo_lote(batch.status)}"
                         batch_options[label] = batch.id
             
             selected = st.multiselect(
@@ -85,7 +87,7 @@ def render():
                     if os.path.exists(b.pdf_path):
                         with open(b.pdf_path, "rb") as f:
                             st.download_button(
-                                f"⬇️ Lote #{b.id} - {b.destination_school.name}",
+                                f"⬇️ Lote #{b.id} - {b.destination_school.name if b.destination_school else '—'}",
                                 f.read(),
                                 file_name=f"encaminhamento_lote_{b.id}.pdf",
                                 mime="application/pdf",
@@ -96,22 +98,6 @@ def render():
     
     elif escolhida == 1:
         st.subheader("Envio de Emails")
-        
-        # SMTP Test
-        with st.expander("🔧 Testar Configuração SMTP"):
-            if st.button("Testar Conexão SMTP"):
-                with st.spinner("Testando..."):
-                    result = test_smtp_connection()
-                if result.success:
-                    st.success(f"✅ {result.message}")
-                else:
-                    st.error(f"❌ {result.message}: {result.error}")
-            
-            st.caption(f"Servidor: {SMTP_HOST}:{SMTP_PORT}")
-            st.caption(f"Usuário: {SMTP_USER}")
-            st.caption(f"Remetente: {EMAIL_FROM}")
-        
-        st.divider()
         
         # Select batches ready to send
         with get_session() as session:
@@ -130,7 +116,7 @@ def render():
                     from encaminhamento.database.crud import get_batch
                     batch = get_batch(session, b.id)
                     if batch:
-                        label = f"Lote #{batch.id} - {batch.destination_school.name} ({batch.student_count} alunos) - {rotulo_lote(batch.status)}"
+                        label = f"Lote #{batch.id} - {batch.destination_school.name if batch.destination_school else '—'} ({batch.student_count} alunos) - {rotulo_lote(batch.status)}"
                         batch_options[label] = batch.id
             
             selected_key = st.selectbox(
@@ -148,56 +134,98 @@ def render():
                     batch = get_batch(session, batch_id)
                     if batch:
                         school_email = batch.destination_school.email if batch.destination_school else ""
-                        st.info(f"""
-                        **Lote #{batch.id}**  
-                        Escola Destino: {batch.destination_school.name}  
-                        Escola Origem: {batch.origin_school.name}  
-                        Alunos: {batch.student_count}  
-                        Status: {rotulo_lote(batch.status)}
-                        """)
-                        
+                        dest_name = batch.destination_school.name if batch.destination_school else "—"
+                        origin_name = batch.origin_school.name if batch.origin_school else "—"
+
+                        # Informacoes do lote em linhas limpas (sem indentacao) + status dos alunos
+                        info = (
+                            f"**Lote #{batch.id}**\n\n"
+                            f"Escola Destino: {dest_name}\n"
+                            f"Escola Origem: {origin_name}\n"
+                            f"Alunos: {batch.student_count}\n"
+                            f"Status: {rotulo_lote(batch.status)}"
+                        )
+                        st.info(info)
+
                         if summary.get("by_status"):
-                            st.caption("Status dos alunos:")
-                            for status, count in summary["by_status"].items():
-                                if count > 0:
-                                    st.caption(f"  - {status}: {count}")
-                        
+                            status_items = [
+                                f"{status}: {count}" for status, count in summary["by_status"].items() if count > 0
+                            ]
+                            if status_items:
+                                st.caption("Status dos alunos: " + ", ".join(status_items))
+
                         if not SMTP_USER or not SMTP_PASSWORD:
                             st.warning("⚠️ SMTP não configurado. Configure SMTP_USER e SMTP_PASSWORD no .env.")
-                        
-                        # Email form - auto-populate with destination school email
-                        to_emails = st.text_area(
-                            "Emails destinatários (um por linha ou separados por vírgula):",
-                            value=school_email,
-                            key="email_to_addresses",
-                            placeholder="diretor@escoladestino.com\nsecretaria@escoladestino.com"
-                        )
-                        
-                        cc_emails = st.text_area(
-                            "CC (opcional, um por linha ou separados por vírgula):",
-                            key="email_cc_addresses",
-                            placeholder="coordenador@rede.edu.br"
-                        )
-                        
+
+                        # Campos de envio em duas colunas
+                        col_to, col_cc = st.columns(2)
+                        with col_to:
+                            to_emails = st.text_area(
+                                "Emails destinatários (um por linha ou separados por vírgula):",
+                                value=school_email,
+                                key="email_to_addresses",
+                                placeholder="diretor@escoladestino.com\nsecretaria@escoladestino.com",
+                            )
+                        with col_cc:
+                            cc_emails = st.text_area(
+                                "CC (opcional, um por linha ou separados por vírgula):",
+                                key="email_cc_addresses",
+                                placeholder="coordenador@rede.edu.br",
+                            )
+
+                        # Validacao: preview de validos e sinalizacao de invalidos
+                        validacao = validar_emails(to_emails)
+                        validos = validacao["validos"]
+                        invalidos = validacao["invalidos"]
+
+                        if invalidos:
+                            st.error(f"❌ {len(invalidos)} email(s) inválido(s): {', '.join(invalidos)}")
+                        if validos:
+                            preview = ", ".join(validos[:5])
+                            if len(validos) > 5:
+                                preview += f" +{len(validos) - 5} mais"
+                            st.caption(f"Destinatários válidos ({len(validos)}): {preview}")
+                        else:
+                            st.caption("Nenhum destinatário válido.")
+
                         custom_message = st.text_area(
                             "Mensagem personalizada (opcional):",
                             key="email_custom_msg",
-                            placeholder="Mensagem adicional para o email..."
+                            placeholder="Mensagem adicional para o email...",
                         )
-                        
+
                         include_pdf = st.checkbox("Anexar PDF do encaminhamento", value=True, key="email_attach_pdf")
-                        
-                        if st.button("📧 Enviar Email", type="primary", disabled=not to_emails.strip()):
-                            emails = parse_email_list(to_emails)
-                            cc = parse_email_list(cc_emails) if cc_emails else None
-                            
-                            pdf_path = batch.pdf_path if include_pdf and batch.pdf_path else None
-                            
+
+                        if include_pdf and not (batch.pdf_path and Path(batch.pdf_path).exists()):
+                            st.warning("⚠️ Nenhum PDF gerado para este lote. O email será enviado sem anexo.")
+
+                        pode_enviar = bool(validos) and not invalidos
+                        rotulo_btn = f"📧 Enviar Email ({len(validos)})" if validos else "📧 Enviar Email"
+                        if st.button(rotulo_btn, type="primary", disabled=not pode_enviar):
+                            emails = validos
+                            cc = validar_emails(cc_emails)["validos"] if cc_emails else None
+
+                            pdf_path = batch.pdf_path if (include_pdf and batch.pdf_path and Path(batch.pdf_path).exists()) else None
+
                             with st.spinner("Enviando email..."):
                                 result = send_batch_notification(
                                     batch.id, emails, pdf_path, custom_message, cc=cc
                                 )
-                            
+
+                            # Registra o envio no historico (sucesso ou falha)
+                            subject = f"{NOME_SISTEMA} - {dest_name} - {batch.student_count} alunos"
+                            with get_session() as session_log:
+                                create_sent_email(
+                                    session_log,
+                                    batch_id=batch.id,
+                                    to_emails=emails,
+                                    cc_emails=cc,
+                                    subject=subject,
+                                    pdf_attached=bool(pdf_path),
+                                    success=result.success,
+                                    error_message=result.error,
+                                )
+
                             if result.success:
                                 st.success(f"✅ {result.message}")
                                 if batch.status == BatchStatus.GENERATED:
@@ -207,11 +235,35 @@ def render():
                                     st.rerun()
                             else:
                                 st.error(f"❌ {result.message}: {result.error}")
-        else:
-            st.info("Nenhum lote com PDF gerado. Gere PDFs na aba 'PDFs' primeiro.")
+                    else:
+                        st.info("Nenhum lote com PDF gerado. Gere PDFs na aba 'PDFs' primeiro.")
+    
+        st.divider()
+        with st.expander("📋 Histórico de envios (últimos 50)", expanded=False):
+            with get_session() as session:
+                historicos = list_sent_emails(session, limit=50)
+                rows = []
+                for h in historicos:
+                    dest = h.batch.destination_school.name if (h.batch and h.batch.destination_school) else "—"
+                    rows.append({
+                        "Data": h.sent_at.strftime("%d/%m/%Y %H:%M") if h.sent_at else "",
+                        "Lote": f"#{h.batch_id}" if h.batch_id else "—",
+                        "Destino": dest,
+                        "Para": h.to_emails,
+                        "CC": h.cc_emails or "",
+                        "Assunto": h.subject,
+                        "Anexo": "Sim" if h.pdf_attached else "Não",
+                        "Status": "✅ Enviado" if h.success else "❌ Falha",
+                        "Erro": h.error_message or "",
+                    })
+            if rows:
+                df_hist = pd.DataFrame(rows)
+                st.dataframe(df_hist, hide_index=True, width="stretch")
+            else:
+                st.caption("Nenhum envio registrado ainda.")
     
     elif escolhida == 2:
-        st.subheader("Gerenciamento de Status")
+        st.subheader("Status e Configurações")
         
         st.markdown("**Atualização Automática de Status dos Lotes**")
         
@@ -300,7 +352,7 @@ def render():
                     for batch in batches_in_status:
                         col1, col2, col3 = st.columns([3, 1, 1])
                         with col1:
-                            st.caption(f"Lote #{batch.id} - {batch.destination_school.name}")
+                            st.caption(f"Lote #{batch.id} - {batch.destination_school.name if batch.destination_school else '—'}")
                         with col2:
                             next_statuses = {
                                 BatchStatus.DRAFT: BatchStatus.GENERATED,
@@ -319,8 +371,22 @@ def render():
                                 auto_advance_batch_status(batch.id)
                                 st.rerun()
     
-    elif escolhida == 3:
-        st.subheader("Configurações do Sistema")
+        st.divider()
+
+        st.markdown("**Configurações do Sistema**")
+
+        with st.expander("🔧 Testar Configuração SMTP", expanded=not (SMTP_USER and SMTP_PASSWORD)):
+            if st.button("Testar Conexão SMTP"):
+                with st.spinner("Testando..."):
+                    result = test_smtp_connection()
+                if result.success:
+                    st.success(f"✅ {result.message}")
+                else:
+                    st.error(f"❌ {result.message}: {result.error}")
+
+            st.caption(f"Servidor: {SMTP_HOST}:{SMTP_PORT}")
+            st.caption(f"Usuário: {SMTP_USER}")
+            st.caption(f"Remetente: {EMAIL_FROM}")
         
         st.markdown("**Configuração de Email (variáveis de ambiente)**")
         

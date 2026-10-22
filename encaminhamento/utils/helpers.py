@@ -21,6 +21,30 @@ def parse_email_list(raw: str) -> List[str]:
     return list(dict.fromkeys(matches))
 
 
+def validar_emails(raw: str) -> dict:
+    """
+    Separa enderecos validos de invalidos num texto livre.
+
+    Suporta os mesmos separadores de ``parse_email_list``.
+    Retorna ``{"validos": [...], "invalidos": [...]}``.
+    """
+    validos: List[str] = []
+    invalidos: List[str] = []
+    if not raw:
+        return {"validos": validos, "invalidos": invalidos}
+    for token in re.split(r"[,\s;]+", raw.strip()):
+        token = token.strip()
+        if not token:
+            continue
+        if EMAIL_RE.fullmatch(token):
+            validos.append(token)
+        else:
+            invalidos.append(token)
+    validos = list(dict.fromkeys(validos))
+    invalidos = list(dict.fromkeys(invalidos))
+    return {"validos": validos, "invalidos": invalidos}
+
+
 ORDINAIS = re.compile(r"^\s*\d+\s*[ªº°]\s*", re.IGNORECASE)
 PREFIXOS = re.compile(r"^(E\.?\s*E\.?\s*M\.?|E\.?\s*M\.?|C\.?\s*M\.?|EMEF|EM|CM|C\.?\s*E\.?)\s*", re.IGNORECASE)
 
