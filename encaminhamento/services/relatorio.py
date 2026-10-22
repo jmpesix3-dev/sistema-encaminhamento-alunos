@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 
 from encaminhamento.database import get_session
 from encaminhamento.database.models import (
-    ForwardingBatch, School, Student, StudentStatus, BatchStatus,
+    ForwardingBatch, School, Class, Student, StudentStatus, BatchStatus,
 )
 
 ROTULO_STATUS_ALUNO = {
@@ -305,7 +305,7 @@ def montar_resumo() -> Resumo:
         if ociosas:
             pendencias.append(Pendencia(
                 chave="escolas_ociosas",
-                titulo="Escolas com vagas e sem alunacao",
+                titulo="Escolas com vagas e sem alunos",
                 quantidade=len(ociosas),
                 descricao="Tem procura e capacidade, mas nenhum aluno foi alocado.",
                 pagina="Auto_Allocation",
@@ -313,7 +313,29 @@ def montar_resumo() -> Resumo:
                 criticidade=3,
             ))
 
-    # 10) Versao nova no GitHub
+        # 10) Alunos com informacoes pendentes (faltando endereco ou 1a/2a opcao de destino)
+        # Apenas entre alunos NAO alocados, consistente com contar_situacao_aluno()
+        info_pendente = session.execute(
+            select(func.count(Student.id)).where(
+                Student.allocated_school_id.is_(None),
+                (Student.address.is_(None))
+                | (Student.address == "")
+                | (Student.destination_school_1_id.is_(None))
+                | (Student.destination_school_2_id.is_(None))
+            )
+        ).scalar() or 0
+        if info_pendente:
+            pendencias.append(Pendencia(
+                chave="alunos_info_pendente",
+                titulo="Alunos com informacoes pendentes",
+                quantidade=info_pendente,
+                descricao="Falta endereco ou escola de destino (1a ou 2a opcao). Preencha antes de alocar.",
+                pagina="Alunos",
+                estado={"aluno_status": "info_pendente"},
+                criticidade=2,
+            ))
+
+    # 11) Versao nova no GitHub
     nova_versao = _pendencia_atualizacao()
     if nova_versao:
         pendencias.append(nova_versao)
@@ -328,69 +350,131 @@ def montar_resumo() -> Resumo:
 # Ficam fora de montar_resumo() de proposito: sao chamados sob demanda
 # pelo painel e servem tambem para navegar ate a pagina de Alunos.
 
-def contar_situacao_aluno() -> dict:
+def contar_situacao_aluno(ano_encaminhamento: int = None) -> dict:
     """
     Contagens rapidas para os 4 cards do painel:
 
     - alunos:        total de alunos cadastrados
     - encaminhados:  alunos com escola alocada (allocated_school_id IS NOT NULL)
     - pendente:      alunos sem alocacao (total - encaminhados)
-    - info_pendente: alunos com endereco ou 1a escola de destino faltando
+     - info_pendente: alunos com endereco ou 1a/2a escola de destino faltando
+
+    Quando `ano_encaminhamento` e' informado, escopa aos alunos cujo ano de
+    recebimento (origin_class.year) + 1 == ano_encaminhamento, ou seja, o
+    ano alvo do encaminhamento (ex.: ano_encaminhamento=2027 mostra alunos
+    recebidos em 2026).
     """
     with get_session() as session:
-        total = session.execute(select(func.count(Student.id))).scalar() or 0
-        encaminhados = session.execute(
-            select(func.count(Student.id))
-            .where(Student.allocated_school_id.isnot(None))
-        ).scalar() or 0
+        total_stmt = select(func.count(Student.id)).join(
+            Class, Student.origin_class_id == Class.id, isouter=True
+        )
+        if ano_encaminhamento is not None:
+            total_stmt = total_stmt.where(Class.year + 1 == ano_encaminhamento)
+        total = session.execute(total_stmt).scalar() or 0
 
-        info_pendente = session.execute(
-            select(func.count(Student.id)).where(
+        encaminhados_stmt = (
+            select(func.count(Student.id))
+            .join(Class, Student.origin_class_id == Class.id, isouter=True)
+            .where(Student.allocated_school_id.isnot(None))
+        )
+        if ano_encaminhamento is not None:
+            encaminhados_stmt = encaminhados_stmt.where(
+                Class.year + 1 == ano_encaminhamento
+            )
+        encaminhados = session.execute(encaminhados_stmt).scalar() or 0
+
+        info_pendente_stmt = (
+            select(func.count(Student.id))
+            .join(Class, Student.origin_class_id == Class.id, isouter=True)
+            .where(
+                Student.allocated_school_id.is_(None),
                 (Student.address.is_(None))
                 | (Student.address == "")
                 | (Student.destination_school_1_id.is_(None))
+                | (Student.destination_school_2_id.is_(None)),
             )
-        ).scalar() or 0
+        )
+        if ano_encaminhamento is not None:
+            info_pendente_stmt = info_pendente_stmt.where(
+                Class.year + 1 == ano_encaminhamento
+            )
+        info_pendente = session.execute(info_pendente_stmt).scalar() or 0
+
+        pendente_stmt = (
+            select(func.count(Student.id))
+            .join(Class, Student.origin_class_id == Class.id, isouter=True)
+            .where(
+                Student.allocated_school_id.is_(None),
+                Student.address.isnot(None),
+                Student.address != "",
+                Student.destination_school_1_id.isnot(None),
+                Student.destination_school_2_id.isnot(None),
+            )
+        )
+        if ano_encaminhamento is not None:
+            pendente_stmt = pendente_stmt.where(
+                Class.year + 1 == ano_encaminhamento
+            )
+        pendente = session.execute(pendente_stmt).scalar() or 0
 
         return {
             "alunos": total,
             "encaminhados": encaminhados,
-            "pendente": total - encaminhados,
+            "pendente": pendente,
             "info_pendente": info_pendente,
         }
 
 
-def detalhar_situacao_aluno(situacao: str) -> List[dict]:
+def detalhar_situacao_aluno(situacao: str, ano_encaminhamento: int = None) -> List[dict]:
     """
     Lista de alunos de uma situacao para exibicao detalhada.
 
     `situacao` usa as chaves de SITUACAO_ALUNO.
     Devolve lista de dicionarios prontos para dataframe.
+
+    Quando `ano_encaminhamento` e' informado, filtra alunos cujo ano de
+    recebimento (origin_class.year) + 1 == ano_encaminhamento.
     """
     with get_session() as session:
+        def _com_ano(stmt):
+            """Acrescenta o filtro de ano de encaminhamento, quando informado."""
+            if ano_encaminhamento is not None:
+                stmt = stmt.join(
+                    Class, Student.origin_class_id == Class.id, isouter=True
+                ).where(Class.year + 1 == ano_encaminhamento)
+            return stmt
+
         if situacao == "alunos":
             alunos = session.execute(
-                select(Student).order_by(Student.name)
+                _com_ano(select(Student)).order_by(Student.name)
             ).scalars().all()
         elif situacao == "encaminhados":
             alunos = session.execute(
-                select(Student)
+                _com_ano(select(Student))
                 .where(Student.allocated_school_id.isnot(None))
                 .order_by(Student.name)
             ).scalars().all()
         elif situacao == "pendente":
             alunos = session.execute(
-                select(Student)
-                .where(Student.allocated_school_id.is_(None))
+                _com_ano(select(Student))
+                .where(
+                    Student.allocated_school_id.is_(None),
+                    Student.address.isnot(None),
+                    Student.address != "",
+                    Student.destination_school_1_id.isnot(None),
+                    Student.destination_school_2_id.isnot(None),
+                )
                 .order_by(Student.name)
             ).scalars().all()
         elif situacao == "info_pendente":
             alunos = session.execute(
-                select(Student)
+                _com_ano(select(Student))
                 .where(
+                    Student.allocated_school_id.is_(None),
                     (Student.address.is_(None))
                     | (Student.address == "")
                     | (Student.destination_school_1_id.is_(None))
+                    | (Student.destination_school_2_id.is_(None)),
                 )
                 .order_by(Student.name)
             ).scalars().all()
@@ -399,6 +483,20 @@ def detalhar_situacao_aluno(situacao: str) -> List[dict]:
 
         linhas = []
         for a in alunos:
+            if a.allocated_school_id:
+                pendencia_str = ""
+            else:
+                motivos = []
+                if not a.address or not a.address.strip():
+                    motivos.append("Endereço ausente")
+                if not a.destination_school_1_id:
+                    motivos.append("Sem 1ª opção")
+                if not a.destination_school_2_id:
+                    motivos.append("Sem 2ª opção")
+                if not motivos:
+                    motivos.append("Sem vaga / Opções lotadas")
+                pendencia_str = "; ".join(motivos)
+
             linhas.append({
                 "ID": a.id,
                 "Aluno": a.name,
@@ -407,7 +505,8 @@ def detalhar_situacao_aluno(situacao: str) -> List[dict]:
                 "2ª opção": a.destination_school_2.name if a.destination_school_2 else "",
                 "Endereço": a.address or "",
                 "Alocado em": a.allocated_school.name if a.allocated_school else "",
-                "Status": ROTULO_STATUS_ALUNO.get(a.status.value, a.status.value),
+                "Status": "Encaminhado" if a.allocated_school_id else "Pendente",
+                "Pendência": pendencia_str,
             })
         return linhas
 
@@ -706,7 +805,10 @@ def detalhar_pendencia(chave: str) -> List[dict]:
     return []
 
 
-def detalhar_alunos_por_escola(somente_com_alunos: bool = True) -> List[dict]:
+def detalhar_alunos_por_escola(
+    somente_com_alunos: bool = True,
+    ano_encaminhamento: int = None,
+) -> List[dict]:
     """
     Alunos por escola de origem, quebrados por etapa.
 
@@ -715,6 +817,9 @@ def detalhar_alunos_por_escola(somente_com_alunos: bool = True) -> List[dict]:
 
     Fica fora de montar_resumo() de proposito: o menu lateral conta as
     pendencias em toda pagina e nao deve pagar por esta consulta.
+
+    Quando `ano_encaminhamento` e' informado, filtra alunos cujo ano de
+    recebimento (origin_class.year) + 1 == ano_encaminhamento.
     """
     with get_session() as session:
         # Uma linha por (escola de origem, status)
@@ -728,19 +833,28 @@ def detalhar_alunos_por_escola(somente_com_alunos: bool = True) -> List[dict]:
                 func.count(Student.id).label("quantidade"),
             )
             .join(Student, Student.origin_school_id == School.id)
-            .group_by(School.id, Student.status)
         )
+        if ano_encaminhamento is not None:
+            consulta = consulta.join(
+                Class, Student.origin_class_id == Class.id, isouter=True
+            ).where(Class.year + 1 == ano_encaminhamento)
+        consulta = consulta.group_by(School.id, Student.status)
         if somente_com_alunos:
             consulta = consulta.having(func.count(Student.id) > 0)
 
         contagens = session.execute(consulta).all()
 
         # Alocados e lotes por escola de destino
-        alocados_por_escola = dict(session.execute(
+        alocados_stmt = (
             select(Student.allocated_school_id, func.count(Student.id))
             .where(Student.allocated_school_id.isnot(None))
             .group_by(Student.allocated_school_id)
-        ).all())
+        )
+        if ano_encaminhamento is not None:
+            alocados_stmt = alocados_stmt.join(
+                Class, Student.origin_class_id == Class.id, isouter=True
+            ).where(Class.year + 1 == ano_encaminhamento)
+        alocados_por_escola = dict(session.execute(alocados_stmt).all())
 
     # Monta uma linha por escola, juntando as etapas
     por_escola = {}

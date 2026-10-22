@@ -173,10 +173,23 @@ class AllocationService:
                 ja_alocados_antes = len(todos) - len(alunos)
                 escola_por_id = {s.id: s for s in dest_schools}
 
-                # Separa por preferencia
+                # Alunos sem dados minimos (sem endereco ou sem 1a opcao)
+                # nao podem ser alocados - vao para info_pendente
+                alunos_com_dados = [
+                    a for a in alunos
+                    if a.address
+                    and a.address.strip()
+                    and a.destination_school_1_id
+                ]
+                # Alunos sem dados minimos ficam sem vaga
+                for a in alunos:
+                    if a not in alunos_com_dados:
+                        all_no_address.append(a)
+
+                # Separa por preferencia (apenas alunos com dados minimos)
                 por_primeira = defaultdict(list)
                 por_segunda = defaultdict(list)
-                for aluno in alunos:
+                for aluno in alunos_com_dados:
                     if aluno.destination_school_1_id:
                         por_primeira[aluno.destination_school_1_id].append(aluno)
                     if aluno.destination_school_2_id:
@@ -376,31 +389,64 @@ class AllocationService:
             results=all_allocated + resultados_sem_vaga,
         )
     
-    def reset_allocations(self) -> int:
+    def reset_allocations(self, ano_encaminhamento: Optional[int] = None) -> int:
         """
-        Desfaz a alocacao.
+        Desfaz a alocacao e o encaminhamento completos ou por ano.
 
-        limpa a escola definida e devolve os alunos para Rascunho,
-        desde que nao tenham avancado no fluxo (enviado ou confirmado).
+        limpa a escola definida, apaga lotes e registros de envio,
+        e devolve os alunos para Rascunho.
         """
         with get_session() as session:
-            from sqlalchemy import update
-            from encaminhamento.database.models import Student
+            from sqlalchemy import update, delete, select
+            from encaminhamento.database.models import Student, BatchItem, ForwardingBatch, SentEmail, Class
 
-            resultado = session.execute(
-                update(Student)
-                .where(Student.allocation_status.in_(
-                    ["allocated", "waitlist", "sem_vaga"]
-                ))
-                .values(
-                    allocated_school_id=None,
-                    allocation_status="pending",
-                    allocation_priority=None,
-                    # so volta a rascunho quem ainda nao foi enviado
-                    status=StudentStatus.DRAFT,
+            if ano_encaminhamento is not None:
+                student_ids_stmt = select(Student.id).join(
+                    Class, Student.origin_class_id == Class.id, isouter=True
+                ).where(Class.year + 1 == ano_encaminhamento)
+                student_ids = [r[0] for r in session.execute(student_ids_stmt).all()]
+
+                if not student_ids:
+                    return 0
+
+                session.execute(
+                    delete(BatchItem).where(BatchItem.student_id.in_(student_ids))
                 )
-            )
-            return resultado.rowcount
+
+                lotes_sem_itens = select(ForwardingBatch.id).where(
+                    ~ForwardingBatch.items.any()
+                )
+                session.execute(
+                    delete(ForwardingBatch).where(ForwardingBatch.id.in_(lotes_sem_itens))
+                )
+
+                resultado = session.execute(
+                    update(Student)
+                    .where(Student.id.in_(student_ids))
+                    .values(
+                        allocated_school_id=None,
+                        allocation_status="pending",
+                        allocation_priority=None,
+                        status=StudentStatus.DRAFT,
+                    )
+                )
+                return resultado.rowcount
+            else:
+                session.execute(delete(SentEmail))
+                session.execute(delete(BatchItem))
+                session.execute(delete(ForwardingBatch))
+
+                resultado = session.execute(
+                    update(Student)
+                    .where(Student.allocated_school_id.isnot(None))
+                    .values(
+                        allocated_school_id=None,
+                        allocation_status="pending",
+                        allocation_priority=None,
+                        status=StudentStatus.DRAFT,
+                    )
+                )
+                return resultado.rowcount
     
     def get_allocation_stats(self) -> Dict:
         """Get current allocation statistics."""
