@@ -2,6 +2,7 @@ import folium
 import pandas as pd
 import re
 import streamlit as st
+from typing import List
 from folium.plugins import Draw
 from sqlalchemy.exc import IntegrityError
 from streamlit_folium import st_folium
@@ -561,31 +562,30 @@ def _painel_mapa(escolas, escola_id):
 # ======================================================================
 # Aba: siglas/alias
 # ======================================================================
-def _gerar_sigla_sugerida(nome: str) -> str:
-    """Gera uma sigla sugerida a partir do nome da escola.
+def _gerar_3_siglas(nome: str) -> List[str]:
+    """Gera 3 variações de sigla a partir do nome da escola.
 
-    Remove palavras genéricas (EM, EE, Municipal, Estadual, de, da, do,
-    das, dos) e pega as primeiras letras de cada palavra significativa,
-    resultado em maiúsculas, no máximo 6 caracteres.
+    Remove prefixos genéricos (EM, EE, CM, CME, Municipal, Estadual,
+    de, da, do, das, dos) e produz:
+      - v1: iniciais das palavras significativas (máx 6 chars)
+      - v2: primeiras palavras significativas (máx 10 chars)
+      - v3: nome completo sem prefixos (máx 12 chars)
+    Todas em maiúsculas, sem espaços.
     """
     texto = re.sub(
-        r"\b(EM|EE|CM|CME|Municipal|Estadual|de|da|do|das|dos|e)\b",
+        r"\b(EM|EE|CM|CME|Municipal|Estadual|de|da|do|das|dos)\b",
         "", nome, flags=re.IGNORECASE,
     )
     texto = re.sub(r"[^\w\s]", "", texto)
     texto = re.sub(r"\s+", " ", texto).strip()
-
     palavras = texto.split()
     if not palavras:
-        return ""
+        return ["", "", ""]
 
-    sigla = ""
-    for palavra in palavras:
-        if len(sigla) >= 6:
-            break
-        sigla += palavra[:2].upper()
-
-    return sigla[:6]
+    v1 = "".join(p[:2].upper() for p in palavras)[:6]
+    v2 = "".join(p[:1].upper() for p in palavras)[:6]
+    v3 = "".join(p.upper() for p in palavras)[:12]
+    return [v1, v2, v3]
 
 
 def _aba_alias():
@@ -643,74 +643,67 @@ def _aba_alias():
 
     st.divider()
 
-    # Form para adicionar nova sigla
-    st.markdown("### Adicionar sigla")
+    # Form para adicionar siglas (3 variações por escola)
+    st.markdown("### Adicionar siglas")
 
-    # Sugestão automática de sigla baseada no nome da escola
-    sugestao_opcoes = {
-        e.id: f"{e.name} → {_gerar_sigla_sugerida(e.name)}" for e in escolas
-    }
-    col_sug, _ = st.columns([2, 1])
-    with col_sug:
-        sugestao_id = st.selectbox(
-            "Sugerir sigla para escola",
-            options=[None] + list(sugestao_opcoes.keys()),
-            format_func=lambda x: "Escolha uma escola..." if x is None
-            else sugestao_opcoes[x],
-            key="sugestao_sigla",
-        )
-        if sugestao_id is not None:
-            sigla_sugerida = _gerar_sigla_sugerida(
-                next(e.name for e in escolas if e.id == sugestao_id)
-            )
-            st.session_state["nova_sigla"] = sigla_sugerida
-            st.info(f"Sigla sugerida: **{sigla_sugerida}**")
+    escola_opcoes = {e.id: e.name for e in escolas}
+    escola_id = st.selectbox(
+        "Escola", options=[None] + list(escola_opcoes.keys()),
+        format_func=lambda x: "Selecione..." if x is None
+        else escola_opcoes[x],
+        key="sigla_escola",
+    )
 
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        nova_sigla = st.text_input(
-            "Sigla", key="nova_sigla", placeholder="Ex: dofec",
-            value=st.session_state.get("nova_sigla", ""),
-        )
-    with col2:
-        escola_opcoes = {e.id: e.name for e in escolas}
-        escola_id = st.selectbox(
-            "Escola", options=list(escola_opcoes.keys()),
-            format_func=lambda x: escola_opcoes[x],
-            key="nova_sigla_escola",
-        )
+    s1 = s2 = s3 = ""
+    if escola_id is not None:
+        nome = escola_opcoes[escola_id]
+        v1, v2, v3 = _gerar_3_siglas(nome)
+        st.caption(f"Escola: **{nome}**")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            s1 = st.text_input("Sigla 1", value=v1, key="sigla_1")
+        with c2:
+            s2 = st.text_input("Sigla 2", value=v2, key="sigla_2")
+        with c3:
+            s3 = st.text_input("Sigla 3", value=v3, key="sigla_3")
 
-    if st.button("💾 Salvar sigla", type="primary", use_container_width=True):
-        sigla_valor = st.session_state.get("nova_sigla", "").strip()
-        escola_valor = st.session_state.get("nova_sigla_escola")
-        sigla_normalizada = sigla_valor.upper() if sigla_valor else ""
-        if not sigla_normalizada:
-            st.error("Informe a sigla.")
-        elif escola_valor is None:
+    if st.button("💾 Salvar siglas", type="primary", use_container_width=True):
+        if escola_id is None:
             st.error("Selecione a escola.")
         else:
-            with get_session() as session:
-                existente = get_school_alias(session, sigla_valor)
-                if existente:
-                    st.error(
-                        f"Sigla '{sigla_normalizada}' já existe "
-                        f"para '{existente.school.name}'."
-                    )
-                else:
-                    try:
-                        create_school_alias(session, escola_valor, sigla_valor)
+            siglas = [s for s in (s1, s2, s3) if s and s.strip()]
+            if not siglas:
+                st.error("Informe pelo menos uma sigla.")
+            else:
+                salvos = 0
+                with get_session() as session:
+                    for sigla_valor in siglas:
+                        existente = get_school_alias(session, sigla_valor)
+                        if existente:
+                            st.error(
+                                f"Sigla '{sigla_valor.strip().upper()}' já existe "
+                                f"para '{existente.school.name}'."
+                            )
+                        else:
+                            try:
+                                create_school_alias(
+                                    session, escola_id, sigla_valor
+                                )
+                                salvos += 1
+                            except IntegrityError:
+                                st.error(
+                                    f"Sigla '{sigla_valor.strip().upper()}' já existe."
+                                )
+                    if salvos:
                         st.success(
-                            f"Sigla '{sigla_normalizada}' vinculada a "
-                            f"'{escola_opcoes[escola_valor]}'."
+                            f"{salvos} sigla(s) vinculada(s) a "
+                            f"'{escola_opcoes[escola_id]}'."
                         )
-                        st.session_state.pop("nova_sigla", None)
-                        st.session_state.pop("nova_sigla_escola", None)
-                        st.session_state.pop("sugestao_sigla", None)
+                        st.session_state.pop("sigla_escola", None)
+                        st.session_state.pop("sigla_1", None)
+                        st.session_state.pop("sigla_2", None)
+                        st.session_state.pop("sigla_3", None)
                         st.rerun()
-                    except IntegrityError:
-                        st.error(
-                            f"Sigla '{sigla_normalizada}' já existe."
-                        )
 
 
 # ======================================================================
