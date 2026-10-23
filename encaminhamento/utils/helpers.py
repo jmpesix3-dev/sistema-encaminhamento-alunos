@@ -124,9 +124,17 @@ def match_school_name(input_name: str, threshold: float = 0.6) -> Optional[int]:
     # 4) Verificar aliases cadastradas (siglas como "dofec" -> Domingos Fernandes)
     with get_session() as session:
         from encaminhamento.database.crud import find_school_by_alias
+        # Tenta com o nome normalizado (para nomes completos de escolas)
         alias_school_id = find_school_by_alias(session, alvo)
         if alias_school_id:
             return alias_school_id
+        # Tenta com o nome bruto (siglas como "CMAEE", "dofec" podem ter
+        # prefixos removidos pela normalizacao, ex: "CM" removido de "CMAEE")
+        bruto = input_name.strip().upper() if input_name else ""
+        if bruto and bruto != alvo:
+            alias_school_id = find_school_by_alias(session, bruto)
+            if alias_school_id:
+                return alias_school_id
 
     return None
 

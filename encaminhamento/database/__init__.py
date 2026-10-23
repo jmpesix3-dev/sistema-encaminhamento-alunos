@@ -1,4 +1,5 @@
 from sqlalchemy import create_engine, event
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
 from typing import Generator
@@ -69,7 +70,51 @@ def _executa_seed_escolas(caminho) -> None:
     """Le e importa escolas de data/escolas.xlsx — logica movida de importar_escolas.py."""
     import re
     import openpyxl
-    from encaminhamento.database.crud import create_school
+    from encaminhamento.database.crud import create_school, create_school_alias
+
+    # Siglas (abreviaturas) para cada escola, na mesma ordem das linhas do xlsx.
+    # Usadas para match de nomes abreviados (ex: "dofec" -> Domingos Fernandes)
+    # em arquivos de importacao (planilhas, scanner CCI, .pnj).
+    SIGLAS_POR_ORDEM = [
+        "CMAEE",      # 1: C. M. A. E. E
+        "CMEACM",     # 2: C. M. E. Aldair Coutinho Machado
+        "CMEMMV",     # 3: C. M. E. Marcos Medeiros Valiengo
+        "CMENA",      # 4: C. M. E. Nossa Senhora Aparecida
+        "CMFAS",      # 5: Creche Municipal Floriano de Azeredo Siqueira
+        "CMMAES",     # 6: Creche Municipal Maria Alaide do Espirito Santo
+        "CMMCS",      # 7: Creche Municipal Maria da Conceicao dos Santos Campos
+        "CMJRP",      # 8: Creche Municipal Professor Joao Rodrigues Pinto
+        "CMSOS",      # 9: Creche Municipal Saul de Oliveira e Silva
+        "EMASA",      # 10: E. M. Amalia Soares de Almeida
+        "EMASP",      # 11: E. M. Amaro de Souza Paes
+        "EMAM",       # 12: E. M. Angelo Antonio Mendonca
+        "EMBA",       # 13: E. M. Belmiro Ribeiro Alves
+        "EMCHS",      # 14: E. M. Chrisanto Henrique de Souza
+        "DOFEC",      # 15: E. M. Domingos Fernandes da Costa
+        "EMNA",       # 16: E. M. Dr. Newton Alves
+        "ESC",        # 17: Educandario Santa Cecilia
+        "EMEM",       # 18: E. M. Elysio de Magalhaes
+        "EMEJG",      # 19: E. M. Evanir Jose Gaia
+        "EMGIM",      # 20: E. M. Guilhermina Inacio Mendonca
+        "EMJFB",      # 21: E. M. Joao Flavio Batista
+        "CMEA1",      # 22: CMEA 1
+        "EMLDM",      # 23: E. M. Luiz Delio Mendonca
+        "EMAR",       # 24: E. M. Manoel Alves Rangel
+        "EMSG",       # 25: E. M. Manoel de Souza Gomes
+        "EMGM",       # 26: E. M. Manoel Grecy Mendonca
+        "EMNB",       # 27: E. M. Manoel Nunes Barreto
+        "EMMA",       # 28: E. M. Maria Viana de Abreu
+        "EMPDGS",     # 29: E. M. Professora Dionelia Goncalves Santos
+        "CMEJA",      # 30: CMEJA
+        "CIEPGT",     # 31: Ciep 265 Municipalizado Professora Gladys Teixeira
+        "EEMFAT",     # 32: E. E. M. Francisco Alves Toledo
+        "EEMJBA",     # 33: E. E. M. Joao Batista Alves
+        "EEMJSR",     # 34: E. E. M. Joao da Silva Ribeiro
+        "EELGSN",     # 35: E. E. M. Luiz Gomes da Silva Neto
+        "EEMDB",      # 36: E. E. M. Manoel Ducas de Brito
+        "EELMN",      # 37: E. E. M. Manoel Luiz Nogueira
+        "CMEA2",      # 38: CMEA 2
+    ]
 
     def _limpar(valor):
         if valor is None:
@@ -116,6 +161,8 @@ def _executa_seed_escolas(caminho) -> None:
         return
 
     criadas = 0
+    aliases_criados = 0
+    sigla_idx = 0
     with get_session() as session:
         for row in ws.iter_rows(min_row=linha_cabecalho + 1, values_only=True):
             numero = row[0]
@@ -136,7 +183,7 @@ def _executa_seed_escolas(caminho) -> None:
 
             endereco_completo = f"{endereco}, {distrito} Distrito" if endereco and distrito else endereco
 
-            create_school(
+            escola = create_school(
                 session, nome,
                 address=endereco_completo,
                 distrito=distrito,
@@ -150,7 +197,19 @@ def _executa_seed_escolas(caminho) -> None:
             )
             criadas += 1
 
+            # Vincula sigla à escola recém-criada (ordem posicional do xlsx)
+            if sigla_idx < len(SIGLAS_POR_ORDEM):
+                sigla = SIGLAS_POR_ORDEM[sigla_idx]
+                try:
+                    create_school_alias(session, escola.id, sigla)
+                    aliases_criados += 1
+                except IntegrityError:
+                    session.rollback()
+                sigla_idx += 1
+
     print(f"Seed: {criadas} escola(s) importada(s) de escolas.xlsx.")
+    if aliases_criados:
+        print(f"Seed: {aliases_criados} sigla(s) vinculada(s) às escolas.")
 
 
 @contextmanager
