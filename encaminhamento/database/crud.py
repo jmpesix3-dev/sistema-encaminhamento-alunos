@@ -4,7 +4,7 @@ from sqlalchemy import select, or_
 from sqlalchemy.orm import Session, joinedload
 from encaminhamento.database.models import (
     School, Class, Student, ForwardingBatch, BatchItem,
-    StudentStatus, BatchStatus, SentEmail
+    StudentStatus, BatchStatus, SentEmail, SchoolAlias
 )
 
 
@@ -443,3 +443,35 @@ def list_sent_emails(session: Session, limit: int = 50) -> List[SentEmail]:
         .limit(limit)
     )
     return session.execute(stmt).unique().scalars().all()
+
+
+# SchoolAlias CRUD
+def create_school_alias(session: Session, school_id: int, sigla: str) -> SchoolAlias:
+    alias = SchoolAlias(school_id=school_id, sigla=sigla.strip().upper())
+    session.add(alias)
+    session.flush()
+    return alias
+
+
+def list_school_aliases(session: Session) -> List[SchoolAlias]:
+    stmt = select(SchoolAlias).options(joinedload(SchoolAlias.school)).order_by(SchoolAlias.sigla)
+    return session.execute(stmt).unique().scalars().all()
+
+
+def get_school_alias(session: Session, sigla: str) -> Optional[SchoolAlias]:
+    stmt = select(SchoolAlias).where(SchoolAlias.sigla == sigla.strip().upper())
+    return session.execute(stmt).scalar_one_or_none()
+
+
+def delete_school_alias(session: Session, alias_id: int) -> bool:
+    alias = session.get(SchoolAlias, alias_id)
+    if alias:
+        session.delete(alias)
+        return True
+    return False
+
+
+def find_school_by_alias(session: Session, sigla: str) -> Optional[int]:
+    """Retorna o school_id da alias, ou None se nao encontrada."""
+    alias = get_school_alias(session, sigla)
+    return alias.school_id if alias else None

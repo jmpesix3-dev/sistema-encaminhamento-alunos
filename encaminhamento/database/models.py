@@ -47,9 +47,24 @@ class School(Base):
     origin_classes = relationship("Class", foreign_keys="Class.school_id", back_populates="school")
     destination_batches = relationship("ForwardingBatch", foreign_keys="ForwardingBatch.destination_school_id", back_populates="destination_school")
     origin_batches = relationship("ForwardingBatch", foreign_keys="ForwardingBatch.origin_school_id", back_populates="origin_school")
+    school_aliases = relationship("SchoolAlias", foreign_keys="SchoolAlias.school_id", back_populates="school", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<School(id={self.id}, name='{self.name}', oferta={self.oferta})>"
+
+
+class SchoolAlias(Base):
+    __tablename__ = "school_aliases"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
+    sigla = Column(String(50), nullable=False, unique=True)
+    created_at = Column(DateTime, default=func.now())
+
+    school = relationship("School", foreign_keys=[school_id], back_populates="school_aliases")
+
+    def __repr__(self):
+        return f"<SchoolAlias(id={self.id}, sigla='{self.sigla}', school_id={self.school_id})>"
 
 
 class Class(Base):

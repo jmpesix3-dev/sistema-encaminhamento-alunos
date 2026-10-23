@@ -2,7 +2,7 @@ import re
 from typing import List, Optional
 from encaminhamento.database.models import School
 from encaminhamento.database import get_session
-from encaminhamento.database.crud import find_or_create_school, list_schools
+from encaminhamento.database.crud import find_or_create_school, list_schools, get_school_by_name
 
 
 EMAIL_RE = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
@@ -121,6 +121,13 @@ def match_school_name(input_name: str, threshold: float = 0.6) -> Optional[int]:
     if melhor_id is not None and melhor_nota >= threshold:
         return melhor_id
 
+    # 4) Verificar aliases cadastradas (siglas como "dofec" -> Domingos Fernandes)
+    with get_session() as session:
+        from encaminhamento.database.crud import find_school_by_alias
+        alias_school_id = find_school_by_alias(session, alvo)
+        if alias_school_id:
+            return alias_school_id
+
     return None
 
 
@@ -128,13 +135,11 @@ def get_or_create_school_from_name(
     name: str,
     is_origin: bool = True,
     is_destination: bool = True,
-) -> int:
+) -> Optional[int]:
     """
     Devolve o id da escola com esse nome.
-    Procura por equivalencia; cria a escola se nao encontrar.
+    Procura por equivalencia (inclusive aliases). Nao cria escola se nao encontrar.
     """
-    from encaminhamento.database.crud import get_school_by_name, find_or_create_school
-
     nome = (name or "").strip()
     if not nome:
         return None
@@ -146,14 +151,7 @@ def get_or_create_school_from_name(
 
     # Procura por equivalencia (fora da sessao para nao aninhar)
     achado = match_school_name(nome)
-    if achado:
-        return achado
-
-    with get_session() as session:
-        nova = find_or_create_school(
-            session, nome, is_origin=is_origin, is_destination=is_destination
-        )
-        return nova.id
+    return achado
 
 
 def parse_address_with_reference(address: str) -> tuple:

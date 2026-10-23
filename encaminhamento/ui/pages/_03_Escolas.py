@@ -6,7 +6,10 @@ from streamlit_folium import st_folium
 
 from encaminhamento.ui.components import sidebar_navigation, seletor_abas
 from encaminhamento.database import get_session
-from encaminhamento.database.crud import list_schools, update_school
+from encaminhamento.database.crud import (
+    list_schools, update_school,
+    create_school_alias, list_school_aliases, delete_school_alias, get_school_alias,
+)
 from encaminhamento.services.geocoding import NIVEL, get_geocoding_service
 from encaminhamento.utils.geo import validar_coordenada
 
@@ -554,6 +557,93 @@ def _painel_mapa(escolas, escola_id):
 
 
 # ======================================================================
+# Aba: siglas/alias
+# ======================================================================
+def _aba_alias():
+    st.subheader("Siglas e apelidos de escolas")
+    st.caption(
+        "Mapeie nomes abreviados (ex: 'dofec', 'newton', 'educandario') "
+        "para escolas ja cadastradas. Quando um arquivo traz uma sigla, "
+        "o sistema usa a escola vinculada em vez de criar uma nova."
+    )
+
+    with get_session() as session:
+        escolas = list_schools(session)
+        aliases = list_school_aliases(session)
+
+    # Lista de aliases existentes
+    st.markdown("### Siglas cadastradas")
+    if aliases:
+        linhas = []
+        for a in aliases:
+            escola = a.school
+            linhas.append({
+                "ID": a.id,
+                "Sigla": a.sigla,
+                "Escola vinculada": escola.name if escola else "(nao encontrada)",
+            })
+        df = pd.DataFrame(linhas)
+        edited = st.data_editor(
+            df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "ID": st.column_config.NumberColumn("ID", disabled=True, width="small"),
+                "Sigla": st.column_config.TextColumn("Sigla", width="medium"),
+                "Escola vinculada": st.column_config.TextColumn("Escola vinculada", disabled=True, width="large"),
+            },
+            key="alias_editor",
+        )
+
+        col_del, _ = st.columns([1, 3])
+        with col_del:
+            excluir = st.multiselect(
+                "Excluir sigla(s)",
+                options=[r["ID"] for r in linhas],
+                format_func=lambda x: next(r["Sigla"] for r in linhas if r["ID"] == x),
+                key="alias_excluir",
+            )
+            if excluir and st.button("🗑️ Excluir selecionadas", use_container_width=True):
+                with get_session() as session:
+                    for aid in excluir:
+                        delete_school_alias(session, aid)
+                st.success(f"{len(excluir)} sigla(s) excluída(s).")
+                st.rerun()
+    else:
+        st.info("Nenhuma sigla cadastrada ainda.")
+
+    st.divider()
+
+    # Form para adicionar nova sigla
+    st.markdown("### Adicionar sigla")
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        nova_sigla = st.text_input("Sigla", key="nova_sigla", placeholder="Ex: dofec")
+    with col2:
+        escola_opcoes = {e.id: e.name for e in escolas}
+        escola_id = st.selectbox(
+            "Escola", options=list(escola_opcoes.keys()),
+            format_func=lambda x: escola_opcoes[x],
+            key="nova_sigla_escola",
+        )
+
+    if st.button("💾 Salvar sigla", type="primary", use_container_width=True):
+        if not nova_sigla or not nova_sigla.strip():
+            st.error("Informe a sigla.")
+        elif not escola_id:
+            st.error("Selecione a escola.")
+        else:
+            with get_session() as session:
+                existente = get_school_alias(session, nova_sigla)
+                if existente:
+                    st.error(f"Sigla '{nova_sigla.upper()}' ja existe.")
+                else:
+                    create_school_alias(session, escola_id, nova_sigla)
+                    st.success(f"Sigla '{nova_sigla.upper()}' vinculada a '{escola_opcoes[escola_id]}'.")
+                    st.rerun()
+
+
+# ======================================================================
 def render():
     sidebar_navigation()
 
@@ -570,7 +660,7 @@ def render():
         st.session_state["mapa_escola"] = ir_mapa
         ir_localizacao = True
 
-    abas = ["📋 Dados", "🎯 Capacidade", "📍 Localização"]
+    abas = ["📋 Dados", "🎯 Capacidade", "📍 Localização", "🏷️ Siglas"]
     if ir_capacidade:
         inicial = 1
     elif ir_localizacao or ir_mapa is not None:
@@ -584,5 +674,7 @@ def render():
         _aba_dados()
     elif escolhida == 1:
         _aba_capacidade()
-    else:
+    elif escolhida == 2:
         _aba_localizacao()
+    else:
+        _aba_alias()
