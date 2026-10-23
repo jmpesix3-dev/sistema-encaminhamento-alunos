@@ -2,6 +2,7 @@ import folium
 import pandas as pd
 import streamlit as st
 from folium.plugins import Draw
+from sqlalchemy.exc import IntegrityError
 from streamlit_folium import st_folium
 
 from encaminhamento.ui.components import sidebar_navigation, seletor_abas
@@ -628,7 +629,8 @@ def _aba_alias():
         )
 
     if st.button("💾 Salvar sigla", type="primary", use_container_width=True):
-        if not nova_sigla or not nova_sigla.strip():
+        sigla_normalizada = nova_sigla.strip().upper() if nova_sigla else ""
+        if not sigla_normalizada:
             st.error("Informe a sigla.")
         elif not escola_id:
             st.error("Selecione a escola.")
@@ -636,11 +638,14 @@ def _aba_alias():
             with get_session() as session:
                 existente = get_school_alias(session, nova_sigla)
                 if existente:
-                    st.error(f"Sigla '{nova_sigla.upper()}' ja existe.")
+                    st.error(f"Sigla '{sigla_normalizada}' já existe.")
                 else:
-                    create_school_alias(session, escola_id, nova_sigla)
-                    st.success(f"Sigla '{nova_sigla.upper()}' vinculada a '{escola_opcoes[escola_id]}'.")
-                    st.rerun()
+                    try:
+                        create_school_alias(session, escola_id, nova_sigla)
+                        st.success(f"Sigla '{sigla_normalizada}' vinculada a '{escola_opcoes[escola_id]}'.")
+                        st.rerun()
+                    except IntegrityError:
+                        st.error(f"Sigla '{sigla_normalizada}' já existe.")
 
 
 # ======================================================================
