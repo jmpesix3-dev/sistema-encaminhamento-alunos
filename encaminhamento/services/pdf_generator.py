@@ -192,7 +192,7 @@ def generate_batch_pdf(batch_id: int, output_path: str = None) -> str:
 
 def generate_student_list_pdf(students: List[Student], destination_school: School,
                                origin_school: School, class_name: str = "",
-                               output_path: str = None) -> str:
+                               output_path: str = None, ano: int = 2025) -> str:
     """Generate PDF for a custom student list."""
     if output_path is None:
         output_path = PDF_EXPORT_DIR / (
@@ -264,7 +264,7 @@ def generate_student_list_pdf(students: List[Student], destination_school: Schoo
         f"                                                                  <b>Nº de alunos encaminhados:</b> {len(students)}      / Oferta 20"
     )
     elements.append(Paragraph(title_text, title_style))
-    elements.append(Paragraph("QUADRO DE ENCAMINHAMENTO DE ALUNOS 2025", subtitle_style))
+    elements.append(Paragraph(f"QUADRO DE ENCAMINHAMENTO DE ALUNOS {ano}", subtitle_style))
     elements.append(Spacer(1, 6))
     
     headers = ["Nº", "NOME DO ALUNO", "ENDEREÇO", "UNIDADE DE ORIGEM"]

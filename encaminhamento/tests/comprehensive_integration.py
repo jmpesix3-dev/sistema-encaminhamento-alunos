@@ -123,6 +123,14 @@ def seed_data():
     """Create a rich dataset and return IDs for assertions."""
     init_db()
 
+    # init_db() auto-seeds schools from data/escolas.xlsx.
+    # Clear them so the test starts deterministic and self-contained.
+    with get_session() as s:
+        from encaminhamento.database.models import School, Class
+        s.query(Class).delete()
+        s.query(School).delete()
+        s.commit()
+
     with get_session() as s:
         # --- Origin schools (4) ---
         o1 = create_school(s, "EM Origem Centro", code="O1",

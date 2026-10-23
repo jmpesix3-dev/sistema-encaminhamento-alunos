@@ -19,8 +19,8 @@ CENTRO_SJB = (-21.6344, -41.0499)
 def _aba_dados():
     st.subheader("Dados das escolas")
     st.caption(
-        "Edite os dados e clique em salvar. As alterações ficam no banco; "
-        "para trazer o arquivo escolas.xlsx de volta, rode importar_escolas.py."
+        "Edite os dados e clique em salvar. As alterações ficam no banco. "
+        "As escolas são carregadas automaticamente na primeira inicialização."
     )
 
     with get_session() as session:

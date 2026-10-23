@@ -95,54 +95,100 @@ class Resumo:
         return sum(p.quantidade for p in self.pendencias)
 
 
-def _demanda(session, destino_id: int) -> int:
+def _demanda(session, destino_id: int, ano_encaminhamento: int = None) -> int:
     """Quantos alunos apontaram esta escola como destino (1a ou 2a opcao)."""
-    total = session.execute(
-        select(func.count(Student.id)).where(Student.destination_school_1_id == destino_id)
-    ).scalar() or 0
-    total += session.execute(
-        select(func.count(Student.id)).where(Student.destination_school_2_id == destino_id)
-    ).scalar() or 0
+    stmt1 = select(func.count(Student.id)).where(
+        Student.destination_school_1_id == destino_id
+    )
+    stmt2 = select(func.count(Student.id)).where(
+        Student.destination_school_2_id == destino_id
+    )
+    if ano_encaminhamento is not None:
+        stmt1 = stmt1.join(
+            Class, Student.origin_class_id == Class.id, isouter=True
+        ).where(Class.year + 1 == ano_encaminhamento)
+        stmt2 = stmt2.join(
+            Class, Student.origin_class_id == Class.id, isouter=True
+        ).where(Class.year + 1 == ano_encaminhamento)
+    total = session.execute(stmt1).scalar() or 0
+    total += session.execute(stmt2).scalar() or 0
     return total
 
 
-def montar_resumo() -> Resumo:
-    """Reune indicadores, relacao de escolas e pendencias."""
+def montar_resumo(ano_encaminhamento: int = None) -> Resumo:
+    """Reune indicadores, relacao de escolas e pendencias.
+
+    Quando `ano_encaminhamento` e' informado, filtra todos os alunos e lotes
+    daquele ano de encaminhamento (recebimento ano_encaminhamento - 1).
+    """
     resumo = Resumo()
 
     with get_session() as session:
         resumo.escolas = session.execute(select(func.count(School.id))).scalar() or 0
-        resumo.alunos = session.execute(select(func.count(Student.id))).scalar() or 0
-        resumo.alocados = session.execute(
+
+        # Alunos filtrados por ano quando informado
+        alunos_stmt = select(func.count(Student.id)).join(
+            Class, Student.origin_class_id == Class.id, isouter=True
+        )
+        if ano_encaminhamento is not None:
+            alunos_stmt = alunos_stmt.where(Class.year + 1 == ano_encaminhamento)
+        resumo.alunos = session.execute(alunos_stmt).scalar() or 0
+
+        alocados_stmt = (
             select(func.count(Student.id))
+            .join(Class, Student.origin_class_id == Class.id, isouter=True)
             .where(Student.allocated_school_id.isnot(None))
-        ).scalar() or 0
-        resumo.lotes = session.execute(
-            select(func.count(ForwardingBatch.id))
-        ).scalar() or 0
+        )
+        if ano_encaminhamento is not None:
+            alocados_stmt = alocados_stmt.where(Class.year + 1 == ano_encaminhamento)
+        resumo.alocados = session.execute(alocados_stmt).scalar() or 0
+
+        lotes_stmt = select(func.count(ForwardingBatch.id))
+        if ano_encaminhamento is not None:
+            lotes_stmt = lotes_stmt.where(
+                ForwardingBatch.year == ano_encaminhamento
+            )
+        resumo.lotes = session.execute(lotes_stmt).scalar() or 0
 
         for status in ORDEM_ALUNO:
-            resumo.por_status_aluno[status] = session.execute(
-                select(func.count(Student.id)).where(Student.status == StudentStatus(status))
-            ).scalar() or 0
+            stmt = (
+                select(func.count(Student.id))
+                .join(Class, Student.origin_class_id == Class.id, isouter=True)
+                .where(Student.status == StudentStatus(status))
+            )
+            if ano_encaminhamento is not None:
+                stmt = stmt.where(Class.year + 1 == ano_encaminhamento)
+            resumo.por_status_aluno[status] = session.execute(stmt).scalar() or 0
 
         for status in ORDEM_LOTE:
-            resumo.por_status_lote[status] = session.execute(
-                select(func.count(ForwardingBatch.id))
-                .where(ForwardingBatch.status == BatchStatus(status))
-            ).scalar() or 0
+            stmt = select(func.count(ForwardingBatch.id)).where(
+                ForwardingBatch.status == BatchStatus(status)
+            )
+            if ano_encaminhamento is not None:
+                stmt = stmt.where(ForwardingBatch.year == ano_encaminhamento)
+            resumo.por_status_lote[status] = session.execute(stmt).scalar() or 0
 
-        alocados_por_escola = dict(session.execute(
+        query = (
             select(Student.allocated_school_id, func.count(Student.id))
+            .join(Class, Student.origin_class_id == Class.id, isouter=True)
             .where(Student.allocated_school_id.isnot(None))
             .group_by(Student.allocated_school_id)
-        ).all())
+        )
+        if ano_encaminhamento is not None:
+            query = query.where(Class.year + 1 == ano_encaminhamento)
+        alocados_por_escola = dict(session.execute(query).all())
 
-        origem_por_escola = dict(session.execute(
+        query_origem = (
             select(Student.origin_school_id, func.count(Student.id))
+            .join(Class, Student.origin_class_id == Class.id, isouter=True)
             .where(Student.origin_school_id.isnot(None))
             .group_by(Student.origin_school_id)
-        ).all())
+        )
+        if ano_encaminhamento is not None:
+            query_origem = query_origem.where(
+                Class.year + 1 == ano_encaminhamento
+            )
+        origem_por_escola = dict(session.execute(query_origem).all())
 
         escolas = session.execute(
             select(School).order_by(School.name)
@@ -150,7 +196,7 @@ def montar_resumo() -> Resumo:
 
         relacao = []
         for e in escolas:
-            procura = _demanda(session, e.id)
+            procura = _demanda(session, e.id, ano_encaminhamento)
             vinculados = alocados_por_escola.get(e.id, 0)
             capacidade = e.oferta or 0
             relacao.append({
@@ -202,9 +248,16 @@ def montar_resumo() -> Resumo:
             ))
 
         # 3) Alunos sem coordenada
-        sem_coord = session.execute(
-            select(func.count(Student.id)).where(Student.latitude.is_(None))
-        ).scalar() or 0
+        sem_coord_stmt = (
+            select(func.count(Student.id))
+            .join(Class, Student.origin_class_id == Class.id, isouter=True)
+            .where(Student.latitude.is_(None))
+        )
+        if ano_encaminhamento is not None:
+            sem_coord_stmt = sem_coord_stmt.where(
+                Class.year + 1 == ano_encaminhamento
+            )
+        sem_coord = session.execute(sem_coord_stmt).scalar() or 0
         if sem_coord:
             pendencias.append(Pendencia(
                 chave="alunos_sem_coordenada",
@@ -231,10 +284,16 @@ def montar_resumo() -> Resumo:
             ))
 
         # 5) Alunos sem 2a opcao
-        sem_segunda = session.execute(
+        sem_segunda_stmt = (
             select(func.count(Student.id))
+            .join(Class, Student.origin_class_id == Class.id, isouter=True)
             .where(Student.destination_school_2_id.is_(None))
-        ).scalar() or 0
+        )
+        if ano_encaminhamento is not None:
+            sem_segunda_stmt = sem_segunda_stmt.where(
+                Class.year + 1 == ano_encaminhamento
+            )
+        sem_segunda = session.execute(sem_segunda_stmt).scalar() or 0
         if sem_segunda:
             pendencias.append(Pendencia(
                 chave="alunos_sem_segunda",
@@ -247,10 +306,15 @@ def montar_resumo() -> Resumo:
             ))
 
         # 6) Lotes sem PDF
-        lotes_sem_pdf = session.execute(
+        lotes_sem_pdf_stmt = (
             select(func.count(ForwardingBatch.id))
             .where(ForwardingBatch.pdf_path.is_(None))
-        ).scalar() or 0
+        )
+        if ano_encaminhamento is not None:
+            lotes_sem_pdf_stmt = lotes_sem_pdf_stmt.where(
+                ForwardingBatch.year == ano_encaminhamento
+            )
+        lotes_sem_pdf = session.execute(lotes_sem_pdf_stmt).scalar() or 0
         if lotes_sem_pdf:
             pendencias.append(Pendencia(
                 chave="lotes_sem_pdf",
@@ -263,13 +327,18 @@ def montar_resumo() -> Resumo:
             ))
 
         # 7) Lotes nao enviados
-        lotes_nao_enviados = session.execute(
+        lotes_nao_enviados_stmt = (
             select(func.count(ForwardingBatch.id))
             .where(
                 ForwardingBatch.status == BatchStatus.GENERATED,
                 ForwardingBatch.sent_at.is_(None),
             )
-        ).scalar() or 0
+        )
+        if ano_encaminhamento is not None:
+            lotes_nao_enviados_stmt = lotes_nao_enviados_stmt.where(
+                ForwardingBatch.year == ano_encaminhamento
+            )
+        lotes_nao_enviados = session.execute(lotes_nao_enviados_stmt).scalar() or 0
         if lotes_nao_enviados:
             pendencias.append(Pendencia(
                 chave="lotes_nao_enviados",
@@ -315,15 +384,22 @@ def montar_resumo() -> Resumo:
 
         # 10) Alunos com informacoes pendentes (faltando endereco ou 1a/2a opcao de destino)
         # Apenas entre alunos NAO alocados, consistente com contar_situacao_aluno()
-        info_pendente = session.execute(
-            select(func.count(Student.id)).where(
+        info_pendente_stmt = (
+            select(func.count(Student.id))
+            .join(Class, Student.origin_class_id == Class.id, isouter=True)
+            .where(
                 Student.allocated_school_id.is_(None),
                 (Student.address.is_(None))
                 | (Student.address == "")
                 | (Student.destination_school_1_id.is_(None))
-                | (Student.destination_school_2_id.is_(None))
+                | (Student.destination_school_2_id.is_(None)),
             )
-        ).scalar() or 0
+        )
+        if ano_encaminhamento is not None:
+            info_pendente_stmt = info_pendente_stmt.where(
+                Class.year + 1 == ano_encaminhamento
+            )
+        info_pendente = session.execute(info_pendente_stmt).scalar() or 0
         if info_pendente:
             pendencias.append(Pendencia(
                 chave="alunos_info_pendente",
