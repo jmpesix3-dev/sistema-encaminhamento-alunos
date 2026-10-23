@@ -16,6 +16,11 @@ EXCEL_EXPORT_DIR = DATA_DIR / "export"
 PDF_EXPORT_DIR = DATA_DIR / "pdf"
 BACKUP_DIR = DATA_DIR / "backup"
 
+# Retençao de arquivos gerados (evita encher o disco com exportacoes
+# repetidas). Mantem apenas os N mais recentes por diretorio.
+RESUMO_KEEP_N = int(os.getenv("RESUMO_KEEP_N", "5"))
+EXPORT_KEEP_N = int(os.getenv("EXPORT_KEEP_N", "5"))
+
 for d in [EXCEL_IMPORT_DIR, EXCEL_EXPORT_DIR, PDF_EXPORT_DIR, BACKUP_DIR]:
     d.mkdir(exist_ok=True)
 

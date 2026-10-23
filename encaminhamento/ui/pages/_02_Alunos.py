@@ -4,7 +4,7 @@ from encaminhamento.ui.components import (
     sidebar_navigation, school_selector, file_uploader_with_preview, seletor_abas,
 )
 from encaminhamento.services.excel_import import parse_modeloupload_bytes
-from encaminhamento.services.excel_export import export_students_to_excel, create_template_modeloupload
+from encaminhamento.services.excel_export import export_students_to_excel, create_template_modeloupload, ANO_PADRAO
 from encaminhamento.services.pdf_generator import generate_student_list_pdf
 from encaminhamento.database import get_session
 from encaminhamento.database.crud import (
@@ -12,12 +12,14 @@ from encaminhamento.database.crud import (
     delete_student, get_school_by_name, list_classes,
 )
 from encaminhamento.database.models import StudentStatus, Class, School
+from encaminhamento.config import EXCEL_EXPORT_DIR, PDF_EXPORT_DIR, EXPORT_KEEP_N
 from encaminhamento.utils.status import (
     opcoes_aluno, para_valor_aluno, rotulo_aluno,
 )
 from encaminhamento.utils.helpers import (
     format_student_name, get_or_create_school_from_name, parse_address_with_reference,
 )
+from encaminhamento.utils.arquivos import manter_arquivos_recentes
 
 
 # ======================================================================
@@ -253,7 +255,7 @@ def _aba_manual():
 # ABA 3 - EDITAR DADOS
 # ======================================================================
 def _aba_editar(filtro_status: str = None, filtro_destino: int = None,
-                filtro_origem: int = None):
+                filtro_origem: int = None, ano_encaminhamento: int = None):
     st.subheader("Editar alunos cadastrados")
 
     # O painel pode pedir uma etapa especifica ou os que ficaram sem vaga
@@ -297,6 +299,13 @@ def _aba_editar(filtro_status: str = None, filtro_destino: int = None,
             "Status", ["Todos"] + opcoes_aluno(), key="ed_status"
         )
     with col4:
+        default_ano = (
+            str(ano_encaminhamento)
+            if ano_encaminhamento is not None and ano_encaminhamento in anos_disponiveis
+            else "Todos"
+        )
+        if "ed_ano" not in st.session_state or st.session_state["ed_ano"] != default_ano:
+            st.session_state["ed_ano"] = default_ano
         ano_enc = st.selectbox(
             "Ano encaminhamento",
             ["Todos"] + [str(a) for a in anos_disponiveis],
@@ -482,7 +491,7 @@ def _aba_editar(filtro_status: str = None, filtro_destino: int = None,
 def _aba_exportar():
     st.subheader("Exportar encaminhamento")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         e_origem = school_selector("Escola de origem", key="ex_origem", is_origin=True, allow_new=False)
     with col2:
@@ -490,6 +499,16 @@ def _aba_exportar():
     with col3:
         e_status = st.selectbox(
             "Status", ["Todos"] + opcoes_aluno(), key="ex_status"
+        )
+    with col4:
+        with get_session() as session:
+            classes = list_classes(session)
+        anos_disp = sorted({c.year + 1 for c in classes if c.year})
+        e_ano = st.selectbox(
+            "Ano encaminhamento",
+            ["Todos"] + [str(a) for a in anos_disp],
+            key="ex_ano",
+            help="Recebidos em X sao encaminhados em X+1 (ex.: 2026 -> 2027).",
         )
 
     with get_session() as session:
@@ -500,6 +519,13 @@ def _aba_exportar():
             status=para_valor_aluno(e_status),
             limit=2000,
         )
+
+        if e_ano and e_ano != "Todos":
+            alunos = [
+                a for a in alunos
+                if a.origin_class and a.origin_class.year
+                and a.origin_class.year + 1 == int(e_ano)
+            ]
 
         if not alunos:
             st.info("Nenhum aluno para exportar com os filtros atuais.")
@@ -521,7 +547,15 @@ def _aba_exportar():
 
         c1, c2 = st.columns(2)
         with c1:
-            xlsx = export_students_to_excel(alunos, destino, origem, turma)
+            ano_export = int(e_ano) if e_ano and e_ano != "Todos" else ANO_PADRAO
+            xlsx = export_students_to_excel(alunos, destino, origem, turma, ano=ano_export)
+            # Mantem apenas os EXPORT_KEEP_N arquivos de Excel mais recentes.
+            manter_arquivos_recentes(
+                EXCEL_EXPORT_DIR,
+                "encaminhamento_*.xlsx",
+                EXPORT_KEEP_N,
+                nomes_preservar=["modeloupload_template.xlsx"],
+            )
             st.download_button(
                 "📊 Baixar Excel (modelodownload)",
                 open(xlsx, "rb").read(),
@@ -530,7 +564,9 @@ def _aba_exportar():
                 use_container_width=True,
             )
         with c2:
-            pdf = generate_student_list_pdf(alunos, destino, origem, turma)
+            pdf = generate_student_list_pdf(alunos, destino, origem, turma, ano=ano_export)
+            # Mantem apenas os EXPORT_KEEP_N arquivos de PDF mais recentes.
+            manter_arquivos_recentes(PDF_EXPORT_DIR, "encaminhamento_*.pdf", EXPORT_KEEP_N)
             st.download_button(
                 "📄 Baixar PDF",
                 open(pdf, "rb").read(),
@@ -553,8 +589,9 @@ def render():
     ir_aba = st.session_state.pop("ir_aba", None)
     ir_status = st.session_state.pop("ir_aluno_status", None)
     ir_origem = st.session_state.pop("ir_aluno_origem", None)
+    ir_ano = st.session_state.pop("ir_aluno_ano", None)
 
-    redirecionado = bool(ir_status or ir_origem)
+    redirecionado = bool(ir_status or ir_origem or ir_ano)
 
     abas = ["📤 Carregar Planilha", "✏️ Cadastro Manual", "📝 Editar Dados", "📊 Exportar"]
     # indice 2 = aba Editar. Comparar pelo texto nao funciona porque
@@ -580,6 +617,7 @@ def render():
     elif escolhida == 1:
         _aba_manual()
     elif escolhida == 2:
-        _aba_editar(filtro_status=ir_status, filtro_origem=ir_origem)
+        _aba_editar(filtro_status=ir_status, filtro_origem=ir_origem,
+                    ano_encaminhamento=ir_ano)
     else:
         _aba_exportar()

@@ -26,7 +26,8 @@ from encaminhamento.database.models import (
     Class, ForwardingBatch, StudentStatus,
 )
 from encaminhamento.utils.helpers import get_or_create_school_from_name, format_student_name
-from encaminhamento.config import DATA_DIR
+from encaminhamento.config import DATA_DIR, RESUMO_KEEP_N
+from encaminhamento.utils.arquivos import manter_arquivos_recentes
 
 PASSOS = [
     ("1", "Carregar planilha", "Receber a demanda das escolas", "Alunos", {"aba": "upload"}),
@@ -279,7 +280,8 @@ def _situacao_por_escola(ano_encaminhamento: int = None):
         if escolhida is not None and st.button(
             "Ver alunos", key="situacao_ver_alunos", width="stretch",
         ):
-            ir_para("Alunos", aluno_origem=escolhida)
+            ir_para("Alunos", aluno_origem=escolhida,
+                    aluno_ano=ano_encaminhamento)
 
     visiveis = [l for l in linhas if escolhida is None or l["id"] == escolhida]
 
@@ -537,6 +539,8 @@ def _exportar(resumo):
     """Baixa o resumo em Excel."""
     destino = DATA_DIR / f"resumo_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
     caminho = exportar_resumo(resumo, str(destino))
+    # Mantem apenas os RESUMO_KEEP_N mais recentes, removendo o restante.
+    manter_arquivos_recentes(DATA_DIR, "resumo_*.xlsx", RESUMO_KEEP_N)
     with open(caminho, "rb") as f:
         st.download_button(
             "⬇️ Exportar resumo",
@@ -594,7 +598,7 @@ def render():
 
     ano_encaminhamento = _seletor_ano_encaminhamento()
 
-    resumo = montar_resumo()
+    resumo = montar_resumo(ano_encaminhamento=ano_encaminhamento)
 
     st.divider()
     _passos()
