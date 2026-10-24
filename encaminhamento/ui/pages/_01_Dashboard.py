@@ -515,12 +515,8 @@ def _escolas_atencao(resumo):
         with cols[1]:
             st.caption(e["motivo"])
         with cols[2]:
-            acao = "Ajustar" if not e["geolocalizada"] else "Abrir"
-            if st.button(acao, key=f"atencao_{e['id']}", width="stretch",):
-                if e["geolocalizada"]:
-                    ir_para("Escolas", mapa_escola=e["id"])
-                else:
-                    ir_para("Escolas", localizacao=True)
+            if st.button("Ajustar", key=f"atencao_{e['id']}", width="stretch",):
+                ir_para("Escolas", mapa_escola=e["id"])
 
     st.divider()
     with st.expander("Ver todos os números", expanded=False):

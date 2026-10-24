@@ -723,6 +723,8 @@ def render():
         st.session_state["mapa_escola"] = ir_mapa
         ir_localizacao = True
 
+    veio_do_dashboard = ir_capacidade or ir_localizacao or ir_dados
+
     abas = ["📋 Dados", "🎯 Capacidade", "📍 Localização", "🏷️ Siglas"]
     if ir_capacidade:
         inicial = 1
@@ -731,7 +733,7 @@ def render():
     else:
         inicial = 0
 
-    escolhida = seletor_abas(abas, inicial, chave="abas_escolas")
+    escolhida = seletor_abas(abas, inicial, chave="abas_escolas", forcar=veio_do_dashboard)
 
     if escolhida == 0:
         _aba_dados()
