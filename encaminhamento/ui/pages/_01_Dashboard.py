@@ -557,6 +557,11 @@ def _seletor_ano_encaminhamento():
 
     'Todos' = sem filtro. Retorna None quando nao houver filtro.
     """
+    from datetime import datetime
+
+    ano_atual = datetime.now().year
+    anos_padrao = {ano_atual, ano_atual + 1, ano_atual + 2}
+
     with get_session() as session:
         anos_classe = {
             c + 1
@@ -568,7 +573,7 @@ def _seletor_ano_encaminhamento():
             for b in session.execute(select(ForwardingBatch.year)).scalars().all()
             if b
         }
-        todos = sorted(anos_classe | anos_lote)
+        todos = sorted(anos_classe | anos_lote | anos_padrao)
 
     if not todos:
         st.info("Nenhum ano de encaminhamento definido ainda.")
