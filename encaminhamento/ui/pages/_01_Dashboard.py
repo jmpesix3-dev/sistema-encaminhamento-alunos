@@ -7,6 +7,7 @@ situacao e onde clicar para ir resolver.
 import streamlit as st
 import streamlit.components.v2 as components
 import pandas as pd
+import plotly.express as px
 from datetime import datetime
 from sqlalchemy import select
 
@@ -535,6 +536,105 @@ def _escolas_atencao(resumo):
         )
 
 
+def _indicadores(resumo):
+    """Painel de indicadores gerais com metricas e graficos."""
+    tem_dados = (
+        resumo.escolas > 0
+        or resumo.alunos > 0
+        or resumo.lotes > 0
+        or resumo.total_pendencias > 0
+        or any(e["alunos_procura"] > 0 for e in resumo.relacao_escolas)
+    )
+
+    if not tem_dados:
+        st.info("Sem dados para exibir.")
+        return
+
+    st.subheader("📊 Indicadores gerais")
+
+    # ---- KPIs ----
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    with c1:
+        st.metric("Escolas", resumo.escolas)
+    with c2:
+        st.metric("Alunos", resumo.alunos)
+    with c3:
+        st.metric("Alocados", resumo.alocados)
+    with c4:
+        st.metric("Sem vaga", resumo.sem_vaga)
+    with c5:
+        st.metric("Lotes", resumo.lotes)
+    with c6:
+        st.metric("Pendências", resumo.total_pendencias)
+
+    st.divider()
+
+    # ---- Graficos ----
+    # Alunos por status (somente status com quantidade > 0)
+    alunos_items = [
+        (ROTULO_STATUS_ALUNO.get(k, k), v, COR_STATUS.get(k, "#9aa5b1"))
+        for k, v in resumo.por_status_aluno.items()
+        if v > 0
+    ]
+    # Lotes por status
+    lotes_items = [
+        (ROTULO_STATUS_LOTE.get(k, k), v, COR_STATUS.get(k, "#9aa5b1"))
+        for k, v in resumo.por_status_lote.items()
+        if v > 0
+    ]
+
+    c_g1, c_g2 = st.columns(2)
+    with c_g1:
+        if alunos_items:
+            labels, valores, cores = zip(*alunos_items)
+            fig = px.bar(
+                x=list(labels), y=list(valores),
+                title="Alunos por status",
+                color=list(labels),
+                color_discrete_sequence=list(cores),
+            )
+            fig.update_layout(showlegend=False, height=320, xaxis_title="", yaxis_title="Quantidade")
+            st.plotly_chart(fig, width="stretch")
+        else:
+            st.info("Sem alunos para exibir.")
+
+    with c_g2:
+        if lotes_items:
+            labels, valores, cores = zip(*lotes_items)
+            fig = px.bar(
+                x=list(labels), y=list(valores),
+                title="Lotes por status",
+                color=list(labels),
+                color_discrete_sequence=list(cores),
+            )
+            fig.update_layout(showlegend=False, height=320, xaxis_title="", yaxis_title="Quantidade")
+            st.plotly_chart(fig, width="stretch")
+        else:
+            st.info("Sem lotes para exibir.")
+
+    # ---- Escolas com maior procura vs capacidade ----
+    escolas_procura = sorted(
+        [e for e in resumo.relacao_escolas if e["alunos_procura"] > 0],
+        key=lambda e: e["alunos_procura"],
+        reverse=True,
+    )[:10]
+    if escolas_procura:
+        df_e = pd.DataFrame({
+            "Escola": [e["escola"] for e in escolas_procura],
+            "Procura": [e["alunos_procura"] for e in escolas_procura],
+            "Capacidade": [e["capacidade"] for e in escolas_procura],
+        })
+        df_melt = df_e.melt(id_vars="Escola", value_vars=["Procura", "Capacidade"],
+                            var_name="Metrica", value_name="Quantidade")
+        fig = px.bar(
+            df_melt, x="Escola", y="Quantidade", color="Metrica",
+            title="Top 10 escolas: procura vs capacidade",
+            barmode="group",
+        )
+        fig.update_layout(height=400, xaxis_tickangle=-45)
+        st.plotly_chart(fig, width="stretch")
+
+
 def _exportar(resumo):
     """Baixa o resumo em Excel."""
     destino = DATA_DIR / f"resumo_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
@@ -607,6 +707,9 @@ def render():
 
     st.divider()
     _passos()
+
+    st.divider()
+    _indicadores(resumo)
 
     st.divider()
     _pendencias(resumo)
