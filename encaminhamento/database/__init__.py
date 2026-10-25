@@ -45,35 +45,36 @@ def init_db() -> None:
     with get_session() as session:
         sync_status_aluno_por_alocacao(session)
 
-    # Auto-seed de escolas na primeira inicializacao.
-    # So roda quando a tabela schools está vazia; preserva edições manuais.
-    _seed_escolas_se_banco_vazio()
+    # Auto-seed de escolas. Idempotente: escolas ja existentes sao preservadas;
+    # apenas siglas ausentes sao adicionadas. Seguro executar a qualquer momento.
+    _executa_seed_escolas(caminho=None)
 
 
 def _seed_escolas_se_banco_vazio() -> None:
-    """Carrega escolas de data/escolas.xlsx quando o banco está vazio."""
-    from encaminhamento.database.crud import list_schools
-    from encaminhamento.config import DATA_DIR
-
-    caminho = DATA_DIR / "escolas.xlsx"
-    if not caminho.exists():
-        return
-
-    with get_session() as session:
-        if list_schools(session):
-            return
-
-    _executa_seed_escolas(caminho)
+    """Compatibilidade: delega para _executa_seed_escolas (idempotente)."""
+    _executa_seed_escolas(caminho=None)
 
 
-def _executa_seed_escolas(caminho) -> None:
-    """Le e importa escolas de data/escolas.xlsx — logica movida de importar_escolas.py."""
+def _executa_seed_escolas(caminho=None) -> None:
+    """Le e importa escolas de data/escolas.xlsx — logica movida de importar_escolas.py.
+
+    Idempotente: escolas ja existentes sao preservadas; apenas siglas ausentes
+    sao adicionadas. Seguro executar a qualquer momento, inclusive em banco
+    ja populado.
+    """
     import re
     import openpyxl
     from encaminhamento.database.crud import (
         create_school, create_school_alias, get_school_alias,
+        get_school_by_name,
     )
     from encaminhamento.utils.helpers import gerar_siglas_variacoes
+    from encaminhamento.config import DATA_DIR
+
+    if caminho is None:
+        caminho = DATA_DIR / "escolas.xlsx"
+    if not caminho.exists():
+        return
 
     SIGLAS_POR_ORDEM = [
         "CMAEE", "CMEACM", "CMEMMV", "CMENA", "CMFAS",
@@ -153,19 +154,21 @@ def _executa_seed_escolas(caminho) -> None:
 
             endereco_completo = f"{endereco}, {distrito} Distrito" if endereco and distrito else endereco
 
-            escola = create_school(
-                session, nome,
-                address=endereco_completo,
-                distrito=distrito,
-                modalidade=modalidade,
-                contato=nome_contato,
-                phone=telefone,
-                email=email,
-                is_origin=True,
-                is_destination=True,
-                oferta=0,
-            )
-            criadas += 1
+            escola = get_school_by_name(session, nome)
+            if escola is None:
+                escola = create_school(
+                    session, nome,
+                    address=endereco_completo,
+                    distrito=distrito,
+                    modalidade=modalidade,
+                    contato=nome_contato,
+                    phone=telefone,
+                    email=email,
+                    is_origin=True,
+                    is_destination=True,
+                    oferta=0,
+                )
+                criadas += 1
 
             siglas_a_vincular = set()
 
