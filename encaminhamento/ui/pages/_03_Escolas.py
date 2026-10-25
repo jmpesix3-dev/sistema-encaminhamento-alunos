@@ -675,6 +675,7 @@ def _aba_alias():
                                 )
                                 salvos += 1
                             except IntegrityError:
+                                session.rollback()
                                 st.error(
                                     f"Sigla '{sigla_valor.strip().upper()}' já existe."
                                 )

@@ -70,7 +70,9 @@ def _executa_seed_escolas(caminho) -> None:
     """Le e importa escolas de data/escolas.xlsx — logica movida de importar_escolas.py."""
     import re
     import openpyxl
-    from encaminhamento.database.crud import create_school, create_school_alias
+    from encaminhamento.database.crud import (
+        create_school, create_school_alias, get_school_alias,
+    )
     from encaminhamento.utils.helpers import gerar_siglas_variacoes
 
     SIGLAS_POR_ORDEM = [
@@ -175,11 +177,14 @@ def _executa_seed_escolas(caminho) -> None:
                 siglas_a_vincular.add(sigla)
 
             for sigla in siglas_a_vincular:
+                if get_school_alias(session, sigla):
+                    continue
                 try:
-                    create_school_alias(session, escola.id, sigla)
+                    with session.begin_nested():
+                        create_school_alias(session, escola.id, sigla)
                     aliases_criados += 1
                 except IntegrityError:
-                    session.rollback()
+                    pass
 
     print(f"Seed: {criadas} escola(s) importada(s) de escolas.xlsx.")
     if aliases_criados:
