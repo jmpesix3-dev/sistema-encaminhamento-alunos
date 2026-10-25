@@ -1,6 +1,5 @@
 import folium
 import pandas as pd
-import re
 import streamlit as st
 from typing import List
 from folium.plugins import Draw
@@ -15,6 +14,7 @@ from encaminhamento.database.crud import (
 )
 from encaminhamento.services.geocoding import NIVEL, get_geocoding_service
 from encaminhamento.utils.geo import validar_coordenada
+from encaminhamento.utils.helpers import gerar_siglas_variacoes
 
 CENTRO_SJB = (-21.6344, -41.0499)
 
@@ -565,27 +565,11 @@ def _painel_mapa(escolas, escola_id):
 def _gerar_3_siglas(nome: str) -> List[str]:
     """Gera 3 variações de sigla a partir do nome da escola.
 
-    Remove prefixos genéricos (EM, EE, CM, CME, Municipal, Estadual,
-    de, da, do, das, dos) e produz:
-      - v1: iniciais das palavras significativas (máx 6 chars)
-      - v2: primeiras palavras significativas (máx 10 chars)
-      - v3: nome completo sem prefixos (máx 12 chars)
-    Todas em maiúsculas, sem espaços.
+    Usa a mesma logica de gerar_siglas_variacoes() em helpers.py,
+    retornando as 3 primeiras variações para pre-preencher o formulario.
     """
-    texto = re.sub(
-        r"\b(EM|EE|CM|CME|Municipal|Estadual|de|da|do|das|dos)\b",
-        "", nome, flags=re.IGNORECASE,
-    )
-    texto = re.sub(r"[^\w\s]", "", texto)
-    texto = re.sub(r"\s+", " ", texto).strip()
-    palavras = texto.split()
-    if not palavras:
-        return ["", "", ""]
-
-    v1 = "".join(p[:2].upper() for p in palavras)[:6]
-    v2 = "".join(p[:1].upper() for p in palavras)[:6]
-    v3 = "".join(p.upper() for p in palavras)[:12]
-    return [v1, v2, v3]
+    variacoes = gerar_siglas_variacoes(nome)
+    return variacoes[:3] if len(variacoes) >= 3 else variacoes + [""] * (3 - len(variacoes))
 
 
 def _aba_alias():

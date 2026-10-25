@@ -5,6 +5,12 @@ from encaminhamento.database import get_session
 from encaminhamento.database.crud import find_or_create_school, list_schools, get_school_by_name
 
 
+PREFIXOS_SIGLA = [
+    "EM", "EE", "CM", "CME", "MUNICIPAL", "ESTADUAL",
+    "DE", "DA", "DO", "DAS", "DOS",
+]
+
+
 EMAIL_RE = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
 
 
@@ -67,6 +73,72 @@ def normalize_school_name(name: str) -> str:
 
     texto = re.sub(r"\s+", " ", texto)
     return texto.strip(" .-").upper()
+
+
+def _remover_prefixos(nome: str) -> List[str]:
+    """Remove prefixos genéricos e retorna palavras significativas (maiúsculas).
+
+    Remove prefixos multipartidos como 'E. M.', 'E. E.', 'C. M.', 'C. M. E.'
+    bem como prefixos simples como 'Municipal', 'Estadual', 'de', 'da', 'do', etc.
+    """
+    texto = str(nome)
+    texto = re.sub(r"\s+", " ", texto).strip().upper()
+
+    texto = re.sub(r"^E\.?\s*E\.?\s*M\.?\s*", "", texto)
+    texto = re.sub(r"^C\.?\s*M\.?\s*E\.?\s*", "", texto)
+    texto = re.sub(r"^E\.?\s*M\.?\s*", "", texto)
+    texto = re.sub(r"^C\.?\s*M\.?\s*", "", texto)
+
+    for prefixo in PREFIXOS_SIGLA:
+        if prefixo not in ("EM", "EE", "CM", "CME"):
+            texto = re.sub(rf"\b{re.escape(prefixo)}\b", "", texto)
+
+    texto = re.sub(r"[^\w\s]", " ", texto)
+    texto = re.sub(r"\s+", " ", texto).strip()
+    palavras = [p for p in texto.split() if p]
+    return [p.upper() for p in palavras]
+
+
+def gerar_siglas_variacoes(nome: str) -> List[str]:
+    """Gera variações de sigla a partir do nome da escola.
+
+    Remove prefixos genéricos (E. M., E. E., C. M., C. M. E., Municipal,
+    Estadual, de, da, do, das, dos) e produz:
+      - v1: iniciais (primeira letra de cada palavra, max 6 chars)
+      - v2: primeiras 2 palavras (max 10 chars)
+      - v3: nome completo sem prefixos (max 25 chars)
+      - v4: prefixo original + 1ª palavra sem prefixo (max 6 chars)
+
+    Todas em maiúsculas, sem espaços.
+    """
+    if not nome:
+        return []
+
+    palavras = _remover_prefixos(nome)
+    if not palavras:
+        return []
+
+    # v1: iniciais — primeira letra de cada palavra, max 6 chars
+    v1 = "".join(p[0] for p in palavras if p)[:6]
+    # v2: primeiras 2 palavras (max 10 chars)
+    v2 = "".join(palavras[:2])[:10]
+    # v3: nome completo sem prefixos (max 25 chars)
+    v3 = "".join(palavras)[:25]
+    # v4: prefixo original + 1ª palavra sem prefixo (max 6 chars)
+    texto_original = re.sub(r"\s+", " ", str(nome)).strip().split()
+    if texto_original:
+        prefixo_original = texto_original[0].upper().replace(".", "")
+        v4 = (prefixo_original + palavras[0])[:6]
+    else:
+        v4 = palavras[0][:6]
+
+    # Remove vazias e duplicatas, mantendo ordem
+    result = []
+    for sigla in (v1, v2, v3, v4):
+        sigla = sigla.strip().replace(" ", "").upper()
+        if sigla and sigla not in result:
+            result.append(sigla)
+    return result
 
 
 def _nome_contido(a: str, b: str) -> bool:
