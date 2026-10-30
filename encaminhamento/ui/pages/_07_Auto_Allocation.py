@@ -166,9 +166,8 @@ def render():
 
     if stats["total"] == 0:
         st.warning("Nenhum aluno cadastrado. Use a página **Alunos** para carregar as planilhas.")
-        return
 
-    if stats["allocated"] == 0:
+    if stats["allocated"] == 0 and stats["total"] > 0:
         st.info("A alocação ainda não foi executada. Rode a prévia abaixo para conferir.")
 
     # Aba enviada pelo painel
@@ -263,19 +262,21 @@ def render():
 # Aba: Coordenadas
 # ======================================================================
 def _aba_coordenadas(svc):
-    st.subheader("Coordenadas dos alunos")
+    st.subheader("Coordenadas de escolas e alunos")
     st.caption(
         "A alocação por proximidade precisa das coordenadas. "
         "Sem elas, o aluno não entra na ordenação por distância."
     )
 
+    geo = get_geocoding_service()
+
     with get_session() as session:
         escolas = list_schools(session)
-        alunos = list_students(session, status=StudentStatus.DRAFT, limit=5000)
+        alunos = list_students(session, limit=5000)
 
         esc_ok = sum(1 for e in escolas if e.latitude is not None)
         alu_ok = sum(1 for a in alunos if a.latitude is not None)
-        pendentes = [
+        pendentes_alunos = [
             {
                 "id": a.id,
                 "nome": a.name,
@@ -286,7 +287,7 @@ def _aba_coordenadas(svc):
             }
             for a in alunos if a.latitude is None
         ]
-        ja_prontos = [
+        ja_prontos_alunos = [
             {
                 "Aluno": a.name,
                 "Latitude": a.latitude,
@@ -296,26 +297,33 @@ def _aba_coordenadas(svc):
             for a in alunos if a.latitude is not None
         ]
 
-    faltando = len(pendentes)
-
+    # ==================================================================
+    # SECAO: ESCOLAS
+    # ==================================================================
+    st.markdown("### 🏫 Escolas")
     c1, c2, c3 = st.columns(3)
-    c1.metric("Escolas geolocalizadas", f"{esc_ok}/{len(escolas)}")
-    c2.metric("Alunos geolocalizados", f"{alu_ok}/{len(alunos)}")
-    c3.metric("Faltando", faltando)
+    c1.metric("Total de escolas", len(escolas))
+    c2.metric("Geolocalizadas", esc_ok)
+    c3.metric("Faltando", len(escolas) - esc_ok)
 
-    # Alunos que faltam
-    if not faltando:
-        st.success("Todos os alunos têm coordenadas.")
+    pendentes_escolas = [
+        {
+            "id": e.id,
+            "nome": e.name,
+            "endereco": e.address or "",
+            "distrito": e.distrito or "",
+            "latitude": e.latitude,
+            "longitude": e.longitude,
+        }
+        for e in escolas if e.latitude is None
+    ]
+
+    if not pendentes_escolas:
+        st.success("Todas as escolas têm coordenadas.")
     else:
-        st.warning(
-            f"**{faltando} aluno(s)** sem coordenada não podem ser alocados por "
-            "proximidade."
-        )
+        st.warning(f"**{len(pendentes_escolas)} escola(s)** sem coordenada.")
 
-        # Servico de geocodificacao
-        geo = get_geocoding_service()
-
-        with st.expander("🔑 Serviço de geolocalização"):
+        with st.expander("🔑 Serviço de geolocalização", expanded=False):
             col1, col2 = st.columns([2, 1])
             with col1:
                 chave = st.text_input(
@@ -323,7 +331,7 @@ def _aba_coordenadas(svc):
                     value=geo.api_key,
                     type="password",
                     placeholder="vazio = usa OpenStreetMap",
-                    key="chave_google_alunos",
+                    key="chave_google_alocacao",
                 )
                 if chave != geo.api_key:
                     geo.api_key = chave
@@ -338,10 +346,132 @@ def _aba_coordenadas(svc):
                 "bairro e, por último, a posição do distrito."
             )
 
+        # Tabela editável para coordenadas manuais
+        st.markdown("**Escolas sem coordenada**")
+        df_esc = pd.DataFrame([{
+            "ID": p["id"],
+            "Escola": p["nome"],
+            "Endereço": p["endereco"][:50],
+            "Distrito": p["distrito"],
+            "Latitude": None,
+            "Longitude": None,
+        } for p in pendentes_escolas])
+
+        edited_esc = st.data_editor(
+            df_esc,
+            use_container_width=True,
+            hide_index=True,
+            height=200,
+            column_config={
+                "ID": st.column_config.NumberColumn("ID", disabled=True),
+                "Escola": st.column_config.TextColumn("Escola", disabled=True),
+                "Endereço": st.column_config.TextColumn("Endereço", disabled=True),
+                "Distrito": st.column_config.TextColumn("Distrito", disabled=True),
+                "Latitude": st.column_config.NumberColumn("Latitude", format="%.6f"),
+                "Longitude": st.column_config.NumberColumn("Longitude", format="%.6f"),
+            },
+            key="coord_escolas_editor",
+        )
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("💾 Salvar coordenadas digitadas", use_container_width=True, key="salvar_coord_esc"):
+                salvas = 0
+                avisos = []
+                for _, row in edited_esc.iterrows():
+                    lat, lon = row["Latitude"], row["Longitude"]
+                    if pd.isna(lat) or pd.isna(lon):
+                        continue
+                    ok, msg = validar_coordenada(lat, lon)
+                    if not ok:
+                        avisos.append(f"{row['Escola']}: {msg}")
+                        continue
+                    with get_session() as session:
+                        from encaminhamento.database.crud import update_school
+                        update_school(
+                            session, int(row["ID"]),
+                            latitude=float(lat), longitude=float(lon),
+                        )
+                    salvas += 1
+
+                if salvas:
+                    st.success(f"{salvas} escola(s) com coordenada salva.")
+                else:
+                    st.info("Nenhuma coordenada preenchida.")
+                for aviso in avisos:
+                    st.warning(aviso)
+                if salvas:
+                    st.rerun()
+
+        with col2:
+            if st.button("🗺️ Buscar automaticamente (escolas)", type="primary", use_container_width=True):
+                alvos = [
+                    {"id": p["id"], "endereco": p["endereco"], "nome": p["nome"], "distrito": p["distrito"]}
+                    for p in pendentes_escolas
+                ]
+
+                barra = st.progress(0)
+                rotulo = st.empty()
+                log_placeholder = st.empty()
+                registro = []
+
+                def progresso(atual, total, endereco, status, resultado=None):
+                    pct = (atual - 1) / total if total else 1
+                    barra.progress(pct)
+                    rotulo.text(f"[{atual}/{total}] {str(endereco)[:60]}")
+                    if resultado:
+                        registro.append(
+                            f"[{atual}/{total}] {status}  "
+                            f"{endereco[:45]}  "
+                            f"({resultado[0]:.5f}, {resultado[1]:.5f})"
+                        )
+                    else:
+                        registro.append(f"[{atual}/{total}] {endereco[:45]}")
+
+                    with log_placeholder:
+                        with st.expander("📋 Log da busca", expanded=False):
+                            st.code("\n".join(registro[-10:]), language=None)
+
+                geo.progresso = progresso
+                resumo = geo.geocode_escolas(alvos)
+
+                for a in alvos:
+                    if a.get("lat") is not None:
+                        with get_session() as session:
+                            from encaminhamento.database.crud import update_school
+                            update_school(
+                                session, a["id"],
+                                latitude=a["lat"], longitude=a["lon"],
+                            )
+
+                barra.progress(1.0)
+                st.success(f"**{len(alvos)} escola(s) processada(s)**")
+                st.rerun()
+
+    st.divider()
+
+    # ==================================================================
+    # SECAO: ALUNOS
+    # ==================================================================
+    st.markdown("### 🎓 Alunos")
+    faltando = len(pendentes_alunos)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total de alunos", len(alunos))
+    c2.metric("Geolocalizados", alu_ok)
+    c3.metric("Faltando", faltando)
+
+    if not faltando:
+        st.success("Todos os alunos têm coordenadas.")
+    else:
+        st.warning(
+            f"**{faltando} aluno(s)** sem coordenada não podem ser alocados por "
+            "proximidade."
+        )
+
         # Lista dos pendentes, para quem preferir ajustar na mao
         st.markdown("**Alunos sem coordenada**")
 
-        if pendentes:
+        if pendentes_alunos:
             df = pd.DataFrame([{
                 "ID": p["id"],
                 "Aluno": p["nome"],
@@ -349,7 +479,7 @@ def _aba_coordenadas(svc):
                 "Endereço": p["endereco"][:50],
                 "Latitude": None,
                 "Longitude": None,
-            } for p in pendentes])
+            } for p in pendentes_alunos])
 
             edited = st.data_editor(
                 df,
@@ -398,11 +528,11 @@ def _aba_coordenadas(svc):
                         st.rerun()
 
             with col2:
-                if st.button("🗺️ Buscar automaticamente", type="primary",
+                if st.button("🗺️ Buscar automaticamente (alunos)", type="primary",
                              use_container_width=True):
                     alvos = [
                         {"id": p["id"], "endereco": p["endereco"], "nome": p["nome"]}
-                        for p in pendentes
+                        for p in pendentes_alunos
                     ]
 
                     barra = st.progress(0)
@@ -453,10 +583,11 @@ def _aba_coordenadas(svc):
                     st.rerun()
 
     # Alunos ja geolocalizados
-    if ja_prontos:
+    if ja_prontos_alunos:
+        st.divider()
         st.markdown("**Alunos já geolocalizados**")
         st.dataframe(
-            pd.DataFrame(ja_prontos),
+            pd.DataFrame(ja_prontos_alunos),
             use_container_width=True,
             hide_index=True,
             height=240,
