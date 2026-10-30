@@ -173,6 +173,28 @@ class AllocationService:
                 ja_alocados_antes = len(todos) - len(alunos)
                 escola_por_id = {s.id: s for s in dest_schools}
 
+                # Geolocaliza alunos sem coordenadas on-the-fly.
+                # Usa o servico de geocodificacao para buscar coordenadas
+                # automaticamente, e persiste no banco quando nao for preview.
+                alunos_sem_coord = [a for a in alunos if a.latitude is None or a.longitude is None]
+                if alunos_sem_coord:
+                    alvos_geo = [
+                        {"id": a.id, "endereco": a.address or "", "nome": a.name}
+                        for a in alunos_sem_coord
+                    ]
+                    resumo_geo = self.geocoding.geocode_alunos(alvos_geo)
+                    for a_geo in alvos_geo:
+                        if a_geo.get("lat") is not None:
+                            aluno_obj = next((a for a in alunos_sem_coord if a.id == a_geo["id"]), None)
+                            if aluno_obj:
+                                aluno_obj.latitude = a_geo["lat"]
+                                aluno_obj.longitude = a_geo["lon"]
+                                if not self.preview:
+                                    update_student(
+                                        session, aluno_obj.id,
+                                        latitude=a_geo["lat"], longitude=a_geo["lon"],
+                                    )
+
                 # Alunos sem dados minimos (sem endereco ou sem 1a opcao)
                 # nao podem ser alocados - vao para info_pendente
                 alunos_com_dados = [
