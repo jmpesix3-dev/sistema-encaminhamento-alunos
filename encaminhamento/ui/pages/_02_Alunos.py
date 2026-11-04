@@ -203,7 +203,7 @@ def _aba_manual():
 
     with col2:
         nome = st.text_input("Nome do aluno *", key="mn_nome", placeholder="Ex: João Silva Santos")
-        civil = st.text_input("Nome civil", key="mn_civil", placeholder="Opcional")
+        civil = st.text_input("Nome social", key="mn_civil", placeholder="Opcional")
         endereco = st.text_area(
             "Endereço completo *", key="mn_end",
             placeholder="Rua, número, bairro, cidade, CEP, ponto de referência...", height=110,
