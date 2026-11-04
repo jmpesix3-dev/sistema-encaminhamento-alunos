@@ -94,7 +94,13 @@ def generate_batch_pdf(batch_id: int, output_path: str = None) -> str:
     
     elements = []
 
-    # Top header: institutional block left, MATRÍCULA box right
+    # Top header: logo left, institutional block center, MATRÍCULA box right
+    logo_path = DATA_DIR / "logo_sjb.png"
+    if logo_path.exists():
+        logo_img = Image(str(logo_path), width=2.2 * cm, height=2.2 * cm, kind='proportional')
+    else:
+        logo_img = Paragraph("", cell_style)
+
     inst_text = (
         "ESTADO DO RIO DE JANEIRO<br/>"
         "Prefeitura de São João da Barra<br/>"
@@ -116,13 +122,16 @@ def generate_batch_pdf(batch_id: int, output_path: str = None) -> str:
     )
 
     header_top = Table(
-        [[inst_para, matricula_para]],
-        colWidths=[18 * cm, 7 * cm],
+        [[logo_img, inst_para, matricula_para]],
+        colWidths=[2.5 * cm, 15 * cm, 8 * cm],
+        hAlign='CENTER',
     )
     header_top.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-        ('BOX', (1, 0), (1, -1), 1, black),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+        ('ALIGN', (1, 0), (1, -1), 'LEFT'),
+        ('ALIGN', (2, 0), (2, -1), 'CENTER'),
+        ('BOX', (2, 0), (2, -1), 1, black),
         ('TOPPADDING', (0, 0), (-1, -1), 2),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
         ('LEFTPADDING', (0, 0), (-1, -1), 2),
@@ -144,6 +153,7 @@ def generate_batch_pdf(batch_id: int, output_path: str = None) -> str:
             ),
         ]],
         colWidths=[10 * cm, 6 * cm, 10.5 * cm],
+        hAlign='CENTER',
     )
     header_row.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -348,26 +358,6 @@ def generate_student_list_pdf(students: List[Student], destination_school: Schoo
     
     elements.append(table)
     elements.append(Spacer(1, 20))
-    
-    footer_style = ParagraphStyle(
-        'Footer',
-        parent=styles['Normal'],
-        fontSize=10,
-        leading=14,
-        alignment=TA_LEFT,
-        fontName='Helvetica'
-    )
-    elements.append(Paragraph("Data: _____/_____/______.", footer_style))
-    elements.append(Spacer(1, 10))
-    elements.append(Paragraph(
-        "Secretário&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-        "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-        "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-        "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-        "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-        "Diretor ou Responsável pela Unidade de Ensino",
-        footer_style
-    ))
-    
+
     doc.build(elements)
     return str(output_path)
