@@ -87,7 +87,7 @@ def _aba_upload():
     # --- Tabela revisável ---
     rows = [{
         "Nome": s["name"],
-        "Nome Civil": s.get("civil_name") or s["name"],
+        "Nome social": s.get("civil_name") or s["name"],
         "Endereço": s.get("address", ""),
         "Destino 1": s.get("destination_school_1_name", ""),
         "Destino 2": s.get("destination_school_2_name", ""),
@@ -133,7 +133,7 @@ def _aba_upload():
             create_student(
                 session,
                 name=format_student_name(name),
-                civil_name=format_student_name(row["Nome Civil"] or name),
+                civil_name=format_student_name(row["Nome social"] or name),
                 address=row["Endereço"] or "",
                 reference_point="",
                 origin_school_id=origin_school_id,
@@ -247,7 +247,28 @@ def _aba_manual():
             responsible_signature=assinatura,
         )
 
-    st.success(f"Aluno **{nome}** salvo.")
+    turma_nome = ""
+    if class_id:
+        with get_session() as s:
+            cls = s.get(Class, class_id)
+            if cls:
+                turma_nome = f"{cls.name} ({cls.year})"
+
+    origem_txt = origin["name"] if origin else "-"
+    destino1_txt = dest1["name"] if dest1 else "-"
+    destino2_txt = dest2["name"] if dest2 else "-"
+
+    st.warning(
+        "✅ **Aluno cadastrado com sucesso.**\n\n"
+        f"- **Nome:** {format_student_name(nome)}\n"
+        f"- **Nome social:** {format_student_name(civil) if civil else format_student_name(nome)}\n"
+        f"- **Escola de origem:** {origem_txt} " + (f"({turma_nome})" if turma_nome else "") + "\n"
+        f"- **Destino 1:** {destino1_txt}\n"
+        f"- **Destino 2:** {destino2_txt}\n"
+        f"- **Endereço:** {addr or endereco}\n"
+        f"- **Assinatura:** {'Sim' if assinatura else 'Não'}",
+        icon="⚠️",
+    )
     st.rerun()
 
 

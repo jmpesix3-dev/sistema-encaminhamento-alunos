@@ -151,7 +151,7 @@ def create_template_modeloupload(output_path: str = None, ano: int = ANO_PADRAO)
         c.alignment = ALINHA_CENTRO
         c.border = BORDA
 
-        c = ws.cell(row=linha, column=2, value="Nome Civil: ")
+        c = ws.cell(row=linha, column=2, value="Nome Social: ")
         c.font = STYLE_NORMAL
         c.alignment = ALINHA_ESQUERDA
         c.border = BORDA

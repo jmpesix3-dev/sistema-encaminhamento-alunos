@@ -138,7 +138,7 @@ def render_student_table(students, show_actions: bool = False, key_prefix: str =
         if isinstance(s, dict):
             row = {
                 "Nome": s.get("name", ""),
-                "Nome Civil": s.get("civil_name", ""),
+                "Nome social": s.get("civil_name", ""),
                 "Endereço": s.get("full_address", s.get("address", "")),
                 "Escola Origem": s.get("origin_school", ""),
                 "Turma Origem": s.get("origin_class", ""),
@@ -152,7 +152,7 @@ def render_student_table(students, show_actions: bool = False, key_prefix: str =
         else:
             row = {
                 "Nome": s.name,
-                "Nome Civil": s.civil_name or "",
+                "Nome social": s.civil_name or "",
                 "Endereço": s.full_address,
                 "Escola Origem": s.origin_school.name if s.origin_school else "",
                 "Turma Origem": s.origin_class.name if s.origin_class else "",

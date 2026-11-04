@@ -262,8 +262,8 @@ def format_student_name(name: str) -> str:
     """Format student name consistently."""
     if not name:
         return ""
-    # Remove "Nome Civil:" prefix if present
-    name = re.sub(r'^Nome Civil:\s*', '', name, flags=re.IGNORECASE)
+    # Remove "Nome Social:" prefix if present
+    name = re.sub(r'^Nome Social:\s*', '', name, flags=re.IGNORECASE)
     # Title case but preserve prepositions
     words = name.split()
     formatted = []

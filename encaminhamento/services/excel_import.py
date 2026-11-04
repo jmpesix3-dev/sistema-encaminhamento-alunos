@@ -157,7 +157,7 @@ def parse_modeloupload(file_path: str) -> ImportResult:
 
             nome = linha[1] if len(linha) > 1 else ""
             nome_civil = ""
-            m_civil = re.match(r"^\s*Nome Civil:\s*(.+)$", nome, re.IGNORECASE)
+            m_civil = re.match(r"^\s*Nome Social:\s*(.+)$", nome, re.IGNORECASE)
             if m_civil:
                 nome_civil = m_civil.group(1).strip()
                 nome = nome_civil
