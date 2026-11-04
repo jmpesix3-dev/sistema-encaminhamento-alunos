@@ -11,6 +11,7 @@ from encaminhamento.database import get_session
 from encaminhamento.database.crud import (
     list_schools, update_school,
     create_school_alias, list_school_aliases, delete_school_alias, get_school_alias,
+    delete_school,
 )
 from encaminhamento.services.geocoding import NIVEL, get_geocoding_service
 from encaminhamento.utils.geo import validar_coordenada
@@ -126,6 +127,33 @@ def _aba_dados():
             f"{len(linhas)} escola(s) cadastrada(s). "
             "Campos em branco podem ser preenchidos aqui mesmo."
         )
+
+        # Exclusão de escolas
+        st.divider()
+        st.markdown("**Excluir escola(s)**")
+        escolas_para_excluir = st.multiselect(
+            "Selecione a(s) escola(s) para excluir:",
+            options=[e["ID"] for e in linhas],
+            format_func=lambda eid: f"{eid} - {next(l['Escola'] for l in linhas if l['ID'] == eid)}",
+            key="excluir_escolas_multiselect",
+        )
+
+        if escolas_para_excluir:
+            if st.button(
+                "🗑️ Excluir selecionadas", type="primary", use_container_width=True,
+                key="excluir_escolas_btn",
+            ):
+                algum_excluido = False
+                with get_session() as session:
+                    for eid in escolas_para_excluir:
+                        ok, msg = delete_school(session, eid)
+                        if ok:
+                            algum_excluido = True
+                            st.success(msg)
+                        else:
+                            st.error(msg)
+                if algum_excluido:
+                    st.rerun()
 
 
 # ======================================================================

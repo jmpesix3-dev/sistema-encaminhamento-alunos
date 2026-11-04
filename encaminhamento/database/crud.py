@@ -55,6 +55,60 @@ def update_school(session: Session, school_id: int, **kwargs) -> Optional[School
     return school
 
 
+def delete_school(session: Session, school_id: int) -> tuple[bool, str]:
+    """Exclui uma escola se não houver dependências.
+
+    Verifica se a escola é referenciada por alunos, classes ou lotes.
+    As siglas (SchoolAlias) são removidas automaticamente pelo cascade
+    definido no modelo. Retorna (sucesso, mensagem).
+    """
+    school = get_school(session, school_id)
+    if not school:
+        return False, "Escola não encontrada."
+
+    # Verificar alunos que referenciam esta escola como origem/destino/alocada
+    alunos_vinculados = session.query(Student).filter(
+        or_(
+            Student.origin_school_id == school_id,
+            Student.destination_school_1_id == school_id,
+            Student.destination_school_2_id == school_id,
+            Student.allocated_school_id == school_id,
+        )
+    ).count()
+
+    # Verificar classes desta escola
+    classes_vinculadas = session.query(Class).filter(
+        Class.school_id == school_id
+    ).count()
+
+    # Verificar lotes desta escola (origem ou destino)
+    lotes_vinculados = session.query(ForwardingBatch).filter(
+        or_(
+            ForwardingBatch.origin_school_id == school_id,
+            ForwardingBatch.destination_school_id == school_id,
+        )
+    ).count()
+
+    if alunos_vinculados or classes_vinculadas or lotes_vinculados:
+        motivos = []
+        if alunos_vinculados:
+            motivos.append(f"{alunos_vinculados} aluno(s)")
+        if classes_vinculadas:
+            motivos.append(f"{classes_vinculadas} turma(s)")
+        if lotes_vinculados:
+            motivos.append(f"{lotes_vinculados} lote(s)")
+        return (
+            False,
+            f"Não é possível excluir '{school.name}': "
+            f"existe(m) {', '.join(motivos)} vinculada(s). "
+            f"Remova essas vinculações primeiro.",
+        )
+
+    session.delete(school)
+    session.flush()
+    return True, f"Escola '{school.name}' excluída com sucesso."
+
+
 # Class CRUD
 def create_class(session: Session, school_id: int, name: str, year: int, shift: str = None) -> Class:
     cls = Class(school_id=school_id, name=name, year=year, shift=shift)
