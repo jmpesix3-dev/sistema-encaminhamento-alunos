@@ -613,7 +613,7 @@ def _indicadores(resumo):
         [e for e in resumo.relacao_escolas if e["alunos_procura"] > 0],
         key=lambda e: e["alunos_procura"],
         reverse=True,
-    )[:10]
+    )
     if escolas_procura:
         df_e = pd.DataFrame({
             "Escola": [e["escola"] for e in escolas_procura],
@@ -624,7 +624,7 @@ def _indicadores(resumo):
                             var_name="Metrica", value_name="Quantidade")
         fig = px.bar(
             df_melt, x="Escola", y="Quantidade", color="Metrica",
-            title="Top 10 escolas: procura vs capacidade",
+            title="Escolas: procura vs capacidade",
             barmode="group",
         )
         fig.update_layout(height=400, xaxis_tickangle=-45)
