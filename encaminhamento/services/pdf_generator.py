@@ -33,7 +33,8 @@ def generate_batch_pdf(batch_id: int, output_path: str = None) -> str:
             student_data.append((s.name, s.full_address, origin_name))
     
     if output_path is None:
-        output_path = PDF_EXPORT_DIR / f"encaminhamento_batch_{batch_id}.pdf"
+        escola_destino_segura = nome_seguro(destination_school_name, "escola") if destination_school_name else "escola"
+        output_path = PDF_EXPORT_DIR / f"encaminhamento_lote_{escola_destino_segura}_{batch_id}.pdf"
     
     doc = SimpleDocTemplate(
         str(output_path),
@@ -121,10 +122,10 @@ def generate_batch_pdf(batch_id: int, output_path: str = None) -> str:
     table_data = [headers]
     for idx, (name, address, origin_name) in enumerate(student_data, 1):
         table_data.append([
-            str(idx),
-            name,
-            address,
-            origin_name
+            Paragraph(str(idx), cell_center_style),
+            Paragraph(name, cell_style),
+            Paragraph(address, cell_style),
+            Paragraph(origin_name, cell_style),
         ])
     
     # Column widths for landscape A4
@@ -271,10 +272,10 @@ def generate_student_list_pdf(students: List[Student], destination_school: Schoo
     table_data = [headers]
     for idx, student in enumerate(students, 1):
         table_data.append([
-            str(idx),
-            student.name,
-            student.full_address,
-            origin_school.name
+            Paragraph(str(idx), cell_center_style),
+            Paragraph(student.name, cell_style),
+            Paragraph(student.full_address, cell_style),
+            Paragraph(origin_school.name, cell_style),
         ])
     
     col_widths = [1.5*cm, 7*cm, 11*cm, 7*cm]
