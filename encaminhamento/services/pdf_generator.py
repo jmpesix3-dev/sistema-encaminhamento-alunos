@@ -93,26 +93,69 @@ def generate_batch_pdf(batch_id: int, output_path: str = None) -> str:
     )
     
     elements = []
-    
-    # Logo
-    logo_path = DATA_DIR / "logo_sjb.png"
-    if logo_path.exists():
-        elements.append(Image(str(logo_path), width=2.5*cm, height=2.5*cm, kind='proportional'))
-        elements.append(Spacer(1, 6))
-    
-    # Title row
+
+    # Top header: institutional block left, MATRÍCULA box right
+    inst_text = (
+        "ESTADO DO RIO DE JANEIRO<br/>"
+        "Prefeitura de São João da Barra<br/>"
+        "Secretaria Municipal de Educação<br/>"
+        "Departamento de Supervisão de Ensino"
+    )
+    inst_para = Paragraph(inst_text, cell_style)
+
+    matricula_text = "MATRÍCULA: 2026/2027"
+    matricula_para = Paragraph(
+        matricula_text,
+        ParagraphStyle(
+            'Matricula',
+            parent=cell_style,
+            alignment=TA_CENTER,
+            fontName='Helvetica-Bold',
+            fontSize=10,
+        ),
+    )
+
+    header_top = Table(
+        [[inst_para, matricula_para]],
+        colWidths=[18 * cm, 7 * cm],
+    )
+    header_top.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+        ('BOX', (1, 0), (1, -1), 1, black),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    elements.append(header_top)
+    elements.append(Spacer(1, 8))
+
+    # Destination / Turma / Count row
     class_name = batch.origin_class.name if batch.origin_class else ""
     oferta = batch.destination_school.oferta if batch.destination_school else 0
-    header_parts = []
-    header_parts.append(f"<b>Unidade Escolar de destino:</b> {destination_school_name}")
-    if class_name:
-        header_parts.append(f"<b>Turma:</b> {class_name}")
-    header_parts.append(f"<b>Nº de alunos encaminhados:</b> {len(student_data)} / <b>Oferta:</b> {oferta}")
-    
-    title_text = "                     ".join(header_parts)
-    elements.append(Paragraph(title_text, title_style))
-    
-    # Subtitle
+    header_row = Table(
+        [[
+            Paragraph(f"<b>Unidade Escolar de destino:</b> {destination_school_name}", cell_style),
+            Paragraph(f"<b>Turma:</b> {class_name}", cell_style),
+            Paragraph(
+                f"<b>Nº de alunos encaminhados:</b> {len(student_data)} / <b>Oferta:</b> {oferta}",
+                cell_style,
+            ),
+        ]],
+        colWidths=[10 * cm, 6 * cm, 10.5 * cm],
+    )
+    header_row.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    elements.append(header_row)
+    elements.append(Spacer(1, 6))
+
+    # Subtitle centered
     elements.append(Paragraph("QUADRO DE ENCAMINHAMENTO DE ALUNOS 2025", subtitle_style))
     elements.append(Spacer(1, 6))
     
