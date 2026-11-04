@@ -34,7 +34,7 @@ def generate_batch_pdf(batch_id: int, output_path: str = None) -> str:
     
     if output_path is None:
         escola_destino_segura = nome_seguro(destination_school_name, "escola") if destination_school_name else "escola"
-        output_path = PDF_EXPORT_DIR / f"encaminhamento_lote_{escola_destino_segura}_{batch_id}.pdf"
+        output_path = PDF_EXPORT_DIR / f"encaminhamento_{escola_destino_segura}.pdf"
     
     doc = SimpleDocTemplate(
         str(output_path),
