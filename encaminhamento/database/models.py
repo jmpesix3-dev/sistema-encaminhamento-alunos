@@ -201,3 +201,20 @@ class SentEmail(Base):
 
     def __repr__(self):
         return f"<SentEmail(id={self.id}, batch_id={self.batch_id}, success={self.success})>"
+
+
+class SystemConfig(Base):
+    """Configuracoes de sistema armazenadas no banco (chave-valor).
+
+    Permite configurar SMTP e outras variaveis via interface, sem
+    precisar editar o arquivo .env manualmente.
+    """
+    __tablename__ = "system_configs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String(100), unique=True, nullable=False, index=True)
+    value = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    def __repr__(self):
+        return f"<SystemConfig(key={self.key}, value={self.value})>"

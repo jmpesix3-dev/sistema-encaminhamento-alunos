@@ -4,7 +4,7 @@ from sqlalchemy import select, or_
 from sqlalchemy.orm import Session, joinedload
 from encaminhamento.database.models import (
     School, Class, Student, ForwardingBatch, BatchItem,
-    StudentStatus, BatchStatus, SentEmail, SchoolAlias
+    StudentStatus, BatchStatus, SentEmail, SchoolAlias, SystemConfig
 )
 
 
@@ -529,3 +529,31 @@ def find_school_by_alias(session: Session, sigla: str) -> Optional[int]:
     """Retorna o school_id da alias, ou None se nao encontrada."""
     alias = get_school_alias(session, sigla)
     return alias.school_id if alias else None
+
+
+# SystemConfig CRUD
+def get_system_config(session: Session, key: str) -> Optional[str]:
+    """Retorna o valor de uma configuracao de sistema, ou None se nao existir."""
+    stmt = select(SystemConfig).where(SystemConfig.key == key)
+    row = session.execute(stmt).scalar_one_or_none()
+    return row.value if row else None
+
+
+def set_system_config(session: Session, key: str, value: str) -> None:
+    """Define (ou atualiza) uma configuracao de sistema."""
+    row = session.execute(
+        select(SystemConfig).where(SystemConfig.key == key)
+    ).scalar_one_or_none()
+    if row:
+        row.value = value
+        row.updated_at = func.now()
+    else:
+        row = SystemConfig(key=key, value=value)
+        session.add(row)
+    session.flush()
+
+
+def get_all_system_configs(session: Session) -> dict:
+    """Retorna todas as configuracoes como dicionario {chave: valor}."""
+    rows = session.execute(select(SystemConfig)).scalars().all()
+    return {row.key: row.value for row in rows}

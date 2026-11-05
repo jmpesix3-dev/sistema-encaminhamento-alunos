@@ -24,13 +24,6 @@ EXPORT_KEEP_N = int(os.getenv("EXPORT_KEEP_N", "5"))
 for d in [EXCEL_IMPORT_DIR, EXCEL_EXPORT_DIR, PDF_EXPORT_DIR, BACKUP_DIR]:
     d.mkdir(exist_ok=True)
 
-SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER", "")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
-EMAIL_FROM = os.getenv("EMAIL_FROM", SMTP_USER)
-
 # Nome do sistema. Fica aqui para nao ter o texto espalhado em
 # varios arquivos: mudar o nome e mudar so esta linha.
 NOME_SISTEMA = "Encaminhamento Escolar de Alunos"
@@ -56,3 +49,31 @@ GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
 
 # Ordem de tentativa: Google primeiro (preciso), depois o gratuito.
 GEO_PROVEDORES = os.getenv("GEO_PROVEDORES", "google,nominatim,distrito")
+
+
+# -------------------------------------------------------------------
+# SMTP: le do banco de dados (tabela system_configs) com fallback para
+# variaveis de ambiente (.env). Isso permite configurar via interface
+# sem editar o arquivo .env manualmente.
+# -------------------------------------------------------------------
+
+def _get_config_from_db(key: str, default: str = None) -> str:
+    """Lê uma configuração do banco, com fallback para variável de ambiente."""
+    try:
+        from encaminhamento.database import get_session
+        from encaminhamento.database.crud import get_system_config
+        with get_session() as session:
+            val = get_system_config(session, key)
+            if val is not None and val != "":
+                return val
+    except Exception:
+        pass
+    return default or ""
+
+
+SMTP_HOST = _get_config_from_db("SMTP_HOST", os.getenv("SMTP_HOST", "smtp.gmail.com"))
+SMTP_PORT = int(_get_config_from_db("SMTP_PORT", os.getenv("SMTP_PORT", "587")))
+SMTP_USER = _get_config_from_db("SMTP_USER", os.getenv("SMTP_USER", ""))
+SMTP_PASSWORD = _get_config_from_db("SMTP_PASSWORD", os.getenv("SMTP_PASSWORD", ""))
+SMTP_USE_TLS = _get_config_from_db("SMTP_USE_TLS", os.getenv("SMTP_USE_TLS", "true")).lower() == "true"
+EMAIL_FROM = _get_config_from_db("EMAIL_FROM", os.getenv("EMAIL_FROM", SMTP_USER))

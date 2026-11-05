@@ -5,12 +5,18 @@ from encaminhamento.utils.status import rotulo_aluno, rotulo_lote
 from encaminhamento.utils.helpers import validar_emails
 from encaminhamento.ui.components import sidebar_navigation, seletor_abas
 from encaminhamento.database import get_session
-from encaminhamento.database.crud import list_batches, list_schools, create_sent_email, list_sent_emails
+from encaminhamento.database.crud import (
+    list_batches, list_schools, create_sent_email, list_sent_emails,
+    set_system_config, get_all_system_configs
+)
 from encaminhamento.database.models import BatchStatus
 from encaminhamento.services.pdf_generator import generate_batch_pdf
 from encaminhamento.services.email_sender import send_batch_notification, test_smtp_connection, EmailResult
 from encaminhamento.services.status_tracker import get_status_summary, auto_advance_batch_status, bulk_transition_students
-from encaminhamento.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_USE_TLS, EMAIL_FROM, NOME_SISTEMA
+from encaminhamento.config import (
+    SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_USE_TLS, EMAIL_FROM,
+    NOME_SISTEMA
+)
 
 
 def render():
@@ -390,22 +396,46 @@ def render():
             st.caption(f"Usuário: {SMTP_USER}")
             st.caption(f"Remetente: {EMAIL_FROM}")
         
-        st.markdown("**Configuração de Email (variáveis de ambiente)**")
-        
-        config_items = {
-            "SMTP_HOST": SMTP_HOST,
-            "SMTP_PORT": str(SMTP_PORT),
-            "SMTP_USER": SMTP_USER,
-            "SMTP_PASSWORD": "••••••••" if SMTP_PASSWORD else "Não configurado",
-            "SMTP_USE_TLS": str(SMTP_USE_TLS),
-            "EMAIL_FROM": EMAIL_FROM,
-        }
-        
-        for key, value in config_items.items():
-            st.text_input(key, value=value, disabled=True, key=f"config_{key}")
-        
-        st.info("Configure estas variáveis no arquivo `.env` ou nas variáveis de ambiente do sistema.")
-        
+        st.markdown("**Configuração de Email (SMTP)**")
+        st.caption("Configure as credenciais de e-mail abaixo. Os valores são salvos no banco de dados e validos para todos os usuários do sistema.")
+
+        # Carrega valores atuais do banco (ou .env como fallback)
+        with get_session() as session:
+            all_configs = get_all_system_configs(session)
+
+        smtp_host = all_configs.get("SMTP_HOST", SMTP_HOST)
+        smtp_port = all_configs.get("SMTP_PORT", str(SMTP_PORT))
+        smtp_user = all_configs.get("SMTP_USER", SMTP_USER)
+        smtp_password = all_configs.get("SMTP_PASSWORD", SMTP_PASSWORD)
+        smtp_use_tls = all_configs.get("SMTP_USE_TLS", str(SMTP_USE_TLS)).lower() == "true"
+        email_from = all_configs.get("EMAIL_FROM", EMAIL_FROM)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            new_host = st.text_input("SMTP_HOST", value=smtp_host, key="cfg_smtp_host")
+            new_port = st.text_input("SMTP_PORT", value=smtp_port, key="cfg_smtp_port")
+            new_user = st.text_input("SMTP_USER", value=smtp_user, key="cfg_smtp_user")
+        with col2:
+            new_password = st.text_input(
+                "SMTP_PASSWORD",
+                value=smtp_password,
+                type="password",
+                key="cfg_smtp_password",
+            )
+            new_use_tls = st.checkbox("SMTP_USE_TLS", value=smtp_use_tls, key="cfg_smtp_tls")
+            new_email_from = st.text_input("EMAIL_FROM", value=email_from, key="cfg_email_from")
+
+        if st.button("💾 Salvar configuração de email", type="primary", use_container_width=True, key="btn_save_smtp"):
+            with get_session() as session:
+                set_system_config(session, "SMTP_HOST", new_host)
+                set_system_config(session, "SMTP_PORT", new_port)
+                set_system_config(session, "SMTP_USER", new_user)
+                set_system_config(session, "SMTP_PASSWORD", new_password)
+                set_system_config(session, "SMTP_USE_TLS", str(new_use_tls))
+                set_system_config(session, "EMAIL_FROM", new_email_from)
+            st.success("✅ Configuração de e-mail salva com sucesso!")
+            st.rerun()
+
         st.divider()
         
         st.markdown("**Diretórios de Dados**")
