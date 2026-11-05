@@ -34,7 +34,7 @@ def init_db() -> None:
         @event.listens_for(engine, "connect")
         def _set_sqlite_pragma(dbapi_conn, conn_record):
             dbapi_conn.execute("PRAGMA journal_mode=WAL")
-            dbapi_conn.execute("PRAGMA busy_timeout=5000")
+            dbapi_conn.execute("PRAGMA busy_timeout=30000")
     Base.metadata.create_all(bind=engine)
 
     # Sincroniza status de aluno com a alocacao existente: alunos alocados

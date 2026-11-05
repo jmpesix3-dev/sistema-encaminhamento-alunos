@@ -17,7 +17,7 @@ from encaminhamento.database.models import (
     BatchStatus, Student, StudentStatus,
 )
 from encaminhamento.services.pdf_generator import generate_batch_pdf
-from encaminhamento.services.status_tracker import auto_advance_batch_status
+from encaminhamento.services.status_tracker import auto_advance_batch_status, bulk_transition_students
 
 
 def render():
@@ -188,9 +188,9 @@ def render():
                             else:
                                 with get_session() as session:
                                     update_batch_status(session, batch_info["id"], BatchStatus.GENERATED, pdf_path)
-                                    for s in get_students_for_batch(session, batch_info["id"]):
-                                        from encaminhamento.services.status_tracker import transition_student_status
-                                        transition_student_status(s.id, StudentStatus.SENT)
+                                    alunos = get_students_for_batch(session, batch_info["id"])
+                                    student_ids = [s.id for s in alunos]
+                                bulk_transition_students(student_ids, StudentStatus.SENT)
                                 st.success("PDF gerado!")
                                 st.rerun()
                 
