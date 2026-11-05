@@ -137,6 +137,7 @@ def send_batch_notification(
     custom_message: str = None,
     cc: List[str] = None,
     bcc: List[str] = None,
+    ano_encaminhamento: int = None,
 ) -> EmailResult:
     """Send batch forwarding notification with PDF attachment."""
     with get_session() as session:
@@ -158,35 +159,31 @@ def send_batch_notification(
 
     from encaminhamento.config import NOME_SISTEMA
 
-    subject = f"{NOME_SISTEMA} - {dest_name} - {student_count} alunos"
+    subject = f"{NOME_SISTEMA} - Ano {ano_encaminhamento} - {dest_name} - {student_count} alunos"
 
     body_text = f"""
-{NOME_SISTEMA}
+Encaminhamento Escolar de Alunos {ano_encaminhamento}
 
-Unidade Escolar de Destino: {dest_name}
-Unidade Escolar de Origem: {origin_name}
+Unidade Escolar: {dest_name}
 Turma: {class_name}
 Número de Alunos: {student_count}
 
 {custom_message or 'Segue em anexo o quadro de encaminhamento dos alunos.'}
 
 Atenciosamente,
-{NOME_SISTEMA}
+Departamento de Supervisão de Ensino
 """
 
     body_html = f"""
 <html>
 <body>
-<h2>{NOME_SISTEMA}</h2>
-<table>
-<tr><td><b>Unidade Escolar de Destino:</b></td><td>{dest_name}</td></tr>
-<tr><td><b>Unidade Escolar de Origem:</b></td><td>{origin_name}</td></tr>
-<tr><td><b>Turma:</b></td><td>{class_name}</td></tr>
-<tr><td><b>Número de Alunos:</b></td><td>{student_count}</td></tr>
-</table>
+<p><b>Encaminhamento Escolar de Alunos {ano_encaminhamento}</b></p>
+<p><b>Unidade Escolar:</b> {dest_name}</p>
+<p><b>Turma:</b> {class_name}</p>
+<p><b>Número de Alunos:</b> {student_count}</p>
 <p>{custom_message or 'Segue em anexo o quadro de encaminhamento dos alunos.'}</p>
-<hr>
-<p><small>{NOME_SISTEMA}</small></p>
+<p><b>Atenciosamente,</b></p>
+<p>Departamento de Supervisão de Ensino</p>
 </body>
 </html>
 """

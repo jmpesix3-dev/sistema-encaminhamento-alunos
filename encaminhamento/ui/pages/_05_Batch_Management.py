@@ -257,7 +257,8 @@ def render():
                             if emails:
                                 from encaminhamento.services.email_sender import send_batch_notification
                                 result = send_batch_notification(
-                                    batch.id, emails, batch.pdf_path, custom_msg, cc=cc
+                                    batch.id, emails, batch.pdf_path, custom_msg, cc=cc,
+                                    ano_encaminhamento=batch.year,
                                 )
                                 if result.success:
                                     st.success(result.message)

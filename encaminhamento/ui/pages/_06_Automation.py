@@ -209,7 +209,8 @@ def render():
 
                             with st.spinner("Enviando email..."):
                                 result = send_batch_notification(
-                                    batch.id, emails, pdf_path, custom_message, cc=cc
+                                    batch.id, emails, pdf_path, custom_message, cc=cc,
+                                    ano_encaminhamento=batch.year,
                                 )
 
                             # Registra o envio no historico (sucesso ou falha)
