@@ -695,6 +695,7 @@ def render():
         st.write("")
         st.write("")
         if st.button("🔄 Atualizar", width="stretch",):
+            st.success("Painel atualizado!")
             st.rerun()
 
     ano_encaminhamento = _seletor_ano_encaminhamento()

@@ -188,12 +188,15 @@ def render():
         with c1:
             if st.button("👁️ Simular alocação", type="primary", use_container_width=True):
                 with st.spinner("Calculando..."):
-                    st.session_state["previa"] = svc.run_allocation(preview=True)
+                    prev = svc.run_allocation(preview=True)
+                    st.session_state["previa"] = prev
+                st.success(f"{prev.allocated} alocado(s), {prev.sem_vaga} sem vaga de {prev.total_students} aluno(s).")
 
         with c2:
             if "previa" in st.session_state:
                 if st.button("🗑️ Limpar prévia", use_container_width=True):
                     st.session_state.pop("previa", None)
+                    st.info("Prévia de alocação limpa.")
                     st.rerun()
 
         if "previa" in st.session_state:

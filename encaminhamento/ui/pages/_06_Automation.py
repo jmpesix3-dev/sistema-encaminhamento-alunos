@@ -369,6 +369,7 @@ def render():
                         with col3:
                             if st.button("🔄", key=f"auto_advance_{batch.id}", help="Auto-avançar baseado nos alunos"):
                                 auto_advance_batch_status(batch.id)
+                                st.success(f"Lote #{batch.id} avançado!")
                                 st.rerun()
     
         st.divider()
