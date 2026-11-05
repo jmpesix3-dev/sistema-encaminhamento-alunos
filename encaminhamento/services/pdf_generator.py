@@ -109,7 +109,7 @@ def generate_batch_pdf(batch_id: int, output_path: str = None) -> str:
     )
     inst_para = Paragraph(inst_text, cell_style)
 
-    matricula_text = "MATRÍCULA: 2026/2027"
+    matricula_text = f"MATRÍCULA: {batch.year}/{batch.year + 1}"
     matricula_para = Paragraph(
         matricula_text,
         ParagraphStyle(
@@ -166,7 +166,7 @@ def generate_batch_pdf(batch_id: int, output_path: str = None) -> str:
     elements.append(Spacer(1, 6))
 
     # Subtitle centered
-    elements.append(Paragraph("QUADRO DE ENCAMINHAMENTO DE ALUNOS 2025", subtitle_style))
+    elements.append(Paragraph(f"QUADRO DE ENCAMINHAMENTO DE ALUNOS {batch.year}", subtitle_style))
     elements.append(Spacer(1, 6))
     
     # Table data
@@ -357,7 +357,6 @@ def generate_student_list_pdf(students: List[Student], destination_school: Schoo
     ]))
     
     elements.append(table)
-    elements.append(Spacer(1, 20))
 
     doc.build(elements)
     return str(output_path)
