@@ -193,7 +193,6 @@ Departamento de Supervisão de Ensino
     return send_email(
         to_emails=to_emails,
         subject=subject,
-        body_text=body_text,
         body_html=body_html,
         attachments=attachments,
         cc=cc,
