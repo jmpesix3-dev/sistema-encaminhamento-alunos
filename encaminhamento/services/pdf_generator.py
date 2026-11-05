@@ -109,7 +109,7 @@ def generate_batch_pdf(batch_id: int, output_path: str = None) -> str:
     )
     inst_para = Paragraph(inst_text, cell_style)
 
-    matricula_text = f"MATRÍCULA: {batch.year}/{batch.year + 1}"
+    matricula_text = f"MATRÍCULA: {batch.year - 1}/{batch.year}"
     matricula_para = Paragraph(
         matricula_text,
         ParagraphStyle(
