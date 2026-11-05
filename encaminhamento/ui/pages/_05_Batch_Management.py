@@ -11,13 +11,13 @@ from encaminhamento.database import get_session
 from encaminhamento.database.crud import (
     list_schools, list_students, list_batches,
     get_batch, get_students_for_batch, update_batch_status,
-    create_batches_from_allocation,
+    create_batches_from_allocation, update_student,
 )
 from encaminhamento.database.models import (
     BatchStatus, Student, StudentStatus,
 )
 from encaminhamento.services.pdf_generator import generate_batch_pdf
-from encaminhamento.services.status_tracker import auto_advance_batch_status, bulk_transition_students
+from encaminhamento.services.status_tracker import auto_advance_batch_status, StatusTransition
 
 
 def render():
@@ -189,8 +189,9 @@ def render():
                                 with get_session() as session:
                                     update_batch_status(session, batch_info["id"], BatchStatus.GENERATED, pdf_path)
                                     alunos = get_students_for_batch(session, batch_info["id"])
-                                    student_ids = [s.id for s in alunos]
-                                bulk_transition_students(student_ids, StudentStatus.SENT)
+                                    for s in alunos:
+                                        if StatusTransition.can_transition_student(s.status, StudentStatus.SENT):
+                                            update_student(session, s.id, status=StudentStatus.SENT)
                                 st.success("PDF gerado!")
                                 st.rerun()
                 
@@ -205,21 +206,22 @@ def render():
                         if st.button("✅ Marcar Como Enviado", use_container_width=True, key=f"mark_sent_{batch.id}"):
                             with get_session() as session:
                                 update_batch_status(session, batch.id, BatchStatus.SENT)
-                                # Update students
-                                for s in students:
-                                    from encaminhamento.services.status_tracker import transition_student_status
-                                    transition_student_status(s.id, StudentStatus.SENT)
+                                alunos = get_students_for_batch(session, batch.id)
+                                for s in alunos:
+                                    if StatusTransition.can_transition_student(s.status, StudentStatus.SENT):
+                                        update_student(session, s.id, status=StudentStatus.SENT)
                             st.success("Lote marcado como enviado!")
                             st.rerun()
-                
+
                 with col4:
                     if batch.status == BatchStatus.SENT:
                         if st.button("🏁 Concluir", use_container_width=True, key=f"complete_{batch.id}"):
                             with get_session() as session:
                                 update_batch_status(session, batch.id, BatchStatus.COMPLETED)
-                                for s in get_students_for_batch(session, batch.id):
-                                    from encaminhamento.services.status_tracker import transition_student_status
-                                    transition_student_status(s.id, StudentStatus.CONFIRMED)
+                                alunos = get_students_for_batch(session, batch.id)
+                                for s in alunos:
+                                    if StatusTransition.can_transition_student(s.status, StudentStatus.CONFIRMED):
+                                        update_student(session, s.id, status=StudentStatus.CONFIRMED)
                             st.success("Lote concluído!")
                             st.rerun()
                 
