@@ -134,6 +134,17 @@ def create_student(session: Session, name: str, origin_school_id: int,
                    destination_school_2_id: int = None,
                    status: StudentStatus = StudentStatus.DRAFT,
                    responsible_signature: bool = False) -> Student:
+    # Verifica se ja existe aluno com mesmo nome nesta escola de origem
+    existente = session.execute(
+        select(Student).where(
+            Student.origin_school_id == origin_school_id,
+            Student.name == name,
+        )
+    ).scalar_one_or_none()
+    if existente:
+        raise ValueError(
+            f"Já existe um aluno com o nome '{name}' nesta escola de origem."
+        )
     student = Student(
         name=name, civil_name=civil_name, address=address, reference_point=reference_point,
         origin_school_id=origin_school_id, origin_class_id=origin_class_id,
@@ -193,6 +204,19 @@ def list_students(session: Session,
 def update_student(session: Session, student_id: int, **kwargs) -> Optional[Student]:
     student = get_student(session, student_id)
     if student:
+        # Verifica duplicidade de nome se o nome esta sendo alterado
+        if "name" in kwargs and kwargs["name"] != student.name:
+            existente = session.execute(
+                select(Student).where(
+                    Student.origin_school_id == student.origin_school_id,
+                    Student.name == kwargs["name"],
+                    Student.id != student_id,
+                )
+            ).scalar_one_or_none()
+            if existente:
+                raise ValueError(
+                    f"Já existe um aluno com o nome '{kwargs['name']}' nesta escola de origem."
+                )
         for k, v in kwargs.items():
             if hasattr(student, k):
                 setattr(student, k, v)

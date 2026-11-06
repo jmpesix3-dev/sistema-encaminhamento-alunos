@@ -233,19 +233,23 @@ def _aba_manual():
         return
 
     with get_session() as session:
-        create_student(
-            session,
-            name=format_student_name(nome),
-            civil_name=format_student_name(civil) if civil else format_student_name(nome),
-            address=addr,
-            reference_point=ref,
-            origin_school_id=origin["id"],
-            origin_class_id=class_id,
-            destination_school_1_id=dest1["id"],
-            destination_school_2_id=dest2["id"] if dest2 else None,
-            status=StudentStatus.DRAFT,
-            responsible_signature=assinatura,
-        )
+        try:
+            create_student(
+                session,
+                name=format_student_name(nome),
+                civil_name=format_student_name(civil) if civil else format_student_name(nome),
+                address=addr,
+                reference_point=ref,
+                origin_school_id=origin["id"],
+                origin_class_id=class_id,
+                destination_school_1_id=dest1["id"],
+                destination_school_2_id=dest2["id"] if dest2 else None,
+                status=StudentStatus.DRAFT,
+                responsible_signature=assinatura,
+            )
+        except ValueError as e:
+            st.error(str(e))
+            return
 
     turma_nome = ""
     if class_id:
@@ -258,7 +262,7 @@ def _aba_manual():
     destino1_txt = dest1["name"] if dest1 else "-"
     destino2_txt = dest2["name"] if dest2 else "-"
 
-    st.warning(
+    st.success(
         "✅ **Aluno cadastrado com sucesso.**\n\n"
         f"- **Nome:** {format_student_name(nome)}\n"
         f"- **Nome social:** {format_student_name(civil) if civil else format_student_name(nome)}\n"
@@ -267,7 +271,7 @@ def _aba_manual():
         f"- **Destino 2:** {destino2_txt}\n"
         f"- **Endereço:** {addr or endereco}\n"
         f"- **Assinatura:** {'Sim' if assinatura else 'Não'}",
-        icon="⚠️",
+        icon="✅",
     )
     st.rerun()
 
@@ -458,7 +462,8 @@ def _aba_editar(filtro_status: str = None, filtro_destino: int = None,
                 d1 = (row["Destino 1"] or "").strip()
                 d2 = (row["Destino 2"] or "").strip()
 
-                with get_session() as session:
+            with get_session() as session:
+                try:
                     update_student(
                         session,
                         sid,
@@ -468,7 +473,10 @@ def _aba_editar(filtro_status: str = None, filtro_destino: int = None,
                         destination_school_2_id=get_or_create_school_from_name(d2, is_destination=True) if d2 else None,
                         responsible_signature=bool(row["Assinatura"]),
                     )
-                mudancas += 1
+                except ValueError as e:
+                    st.error(str(e))
+                    return
+            mudancas += 1
 
             st.success(f"{mudancas} aluno(s) atualizado(s)." if mudancas else "Nenhuma alteração.")
             if mudancas:
