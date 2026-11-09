@@ -4,6 +4,7 @@ from encaminhamento.ui.components import (
     sidebar_navigation, school_selector, file_uploader_with_preview, seletor_abas,
 )
 from encaminhamento.services.excel_import import parse_modeloupload_bytes
+from encaminhamento.services.ocr_import import extrair_alunos_da_imagem
 from encaminhamento.services.excel_export import export_students_to_excel, create_template_modeloupload, ANO_PADRAO
 from encaminhamento.services.pdf_generator import generate_student_list_pdf
 from encaminhamento.database import get_session
@@ -606,6 +607,101 @@ def _aba_exportar():
 
 
 # ======================================================================
+# ABA 5 - FOTO / SCAN (OCR)
+# ======================================================================
+def _aba_foto_scan():
+    st.subheader("Cadastrar alunos por foto ou scan")
+    st.caption("Tire uma foto da lista em papel (ANEXO III) ou escaneie. O sistema extrai os nomes e dados automaticamente.")
+
+    uploaded = file_uploader_with_preview("Selecione a foto ou scan", key="up_foto", accept_types=["jpg", "jpeg", "png"])
+
+    if not uploaded:
+        st.info("Aguardando o envio de uma imagem.")
+        return
+
+    # Exibe a imagem enviada para confirmacao
+    st.image(uploaded, caption="Imagem enviada", use_container_width=True)
+
+    if not st.button("🔍 Extrair alunos da imagem", type="primary", use_container_width=True):
+        return
+
+    with st.spinner("Executando OCR (pode demorar na primeira vez - o easyocr baixa os modelos)..."):
+        alunos = extrair_alunos_da_imagem(uploaded.read())
+
+    if not alunos:
+        st.warning("Nenhum aluno foi reconhecido na imagem. Tente uma foto mais clara ou com mais contraste.")
+        return
+
+    st.success(f"**{len(alunos)} aluno(s) extraído(s)** da imagem.")
+
+    # --- Tabela revisável ---
+    rows = [{
+        "Nome": a["nome"],
+        "Nome social": "",
+        "Endereço": a["endereco"],
+        "Destino 1": a["destino_1"],
+        "Destino 2": a["destino_2"],
+        "Assinatura": a["assinatura"],
+    } for a in alunos]
+
+    edited = st.data_editor(
+        pd.DataFrame(rows),
+        use_container_width=True,
+        hide_index=True,
+        column_config={"Assinatura": st.column_config.CheckboxColumn("Assinatura")},
+        key="foto_editor",
+    )
+
+    st.caption("Corrija os dados na tabela se preciso. As escolas de destino são criadas automaticamente.")
+
+    if not st.button("💾 Salvar alunos no banco", type="primary", key="foto_salvar"):
+        return
+
+    # Escola de origem para todos os alunos dessa foto
+    origin = school_selector("Escola de origem *", key="foto_origin", is_origin=True, allow_new=True)
+
+    if not origin:
+        st.error("Escola de origem é obrigatória.")
+        return
+
+    saved = 0
+    with get_session() as session:
+        class_id = None
+        if st.session_state.get("foto_class"):
+            existing = session.query(Class).filter_by(
+                school_id=origin["id"], name=st.session_state["foto_class"]
+            ).first()
+            class_id = existing.id if existing else create_class(
+                session, origin["id"], st.session_state["foto_class"], 2025
+            ).id
+
+        for _, row in edited.iterrows():
+            name = (row["Nome"] or "").strip()
+            if not name:
+                continue
+
+            d1 = (row["Destino 1"] or "").strip()
+            d2 = (row["Destino 2"] or "").strip()
+
+            create_student(
+                session,
+                name=format_student_name(name),
+                civil_name=format_student_name(row["Nome social"] or name),
+                address=row["Endereço"] or "",
+                reference_point="",
+                origin_school_id=origin["id"],
+                origin_class_id=class_id,
+                destination_school_1_id=get_or_create_school_from_name(d1, is_destination=True) if d1 else None,
+                destination_school_2_id=get_or_create_school_from_name(d2, is_destination=True) if d2 else None,
+                status=StudentStatus.DRAFT,
+                responsible_signature=bool(row["Assinatura"]),
+            )
+            saved += 1
+
+    st.success(f"**{saved} aluno(s) salvo(s).** Revise na aba *Editar Dados*.")
+
+
+# ======================================================================
 # PÁGINA
 # ======================================================================
 def render():
@@ -622,7 +718,7 @@ def render():
 
     redirecionado = bool(ir_status or ir_origem or ir_ano)
 
-    abas = ["📤 Carregar Planilha", "✏️ Cadastro Manual", "📝 Editar Dados", "📊 Exportar"]
+    abas = ["📤 Carregar Planilha", "✏️ Cadastro Manual", "📝 Editar Dados", "📊 Exportar", "📷 Foto/Scan"]
     # indice 2 = aba Editar. Comparar pelo texto nao funciona porque
     # os rotulos tem emoji.
     indice_editar = 2
@@ -648,5 +744,7 @@ def render():
     elif escolhida == 2:
         _aba_editar(filtro_status=ir_status, filtro_origem=ir_origem,
                     ano_encaminhamento=ir_ano)
-    else:
+    elif escolhida == 3:
         _aba_exportar()
+    elif escolhida == 4:
+        _aba_foto_scan()
