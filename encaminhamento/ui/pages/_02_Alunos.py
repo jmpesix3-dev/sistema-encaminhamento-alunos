@@ -613,20 +613,23 @@ def _aba_foto_scan():
     st.subheader("Cadastrar alunos por foto ou scan")
     st.caption("Tire uma foto da lista em papel (ANEXO III) ou escaneie. O sistema extrai os nomes e dados automaticamente.")
 
-    uploaded = file_uploader_with_preview("Selecione a foto ou scan", key="up_foto", accept_types=["jpg", "jpeg", "png"])
+    uploaded = file_uploader_with_preview("Selecione a foto ou scan", key="up_foto", file_types=["jpg", "jpeg", "png"])
 
     if not uploaded:
         st.info("Aguardando o envio de uma imagem.")
         return
 
+    # Leia os bytes uma vez para reutilizar na exibicao e no OCR
+    file_bytes = uploaded.read()
+
     # Exibe a imagem enviada para confirmacao
-    st.image(uploaded, caption="Imagem enviada", use_container_width=True)
+    st.image(file_bytes, caption="Imagem enviada", use_container_width=True)
 
     if not st.button("🔍 Extrair alunos da imagem", type="primary", use_container_width=True):
         return
 
     with st.spinner("Executando OCR (pode demorar na primeira vez - o easyocr baixa os modelos)..."):
-        alunos = extrair_alunos_da_imagem(uploaded.read())
+        alunos = extrair_alunos_da_imagem(file_bytes)
 
     if not alunos:
         st.warning("Nenhum aluno foi reconhecido na imagem. Tente uma foto mais clara ou com mais contraste.")

@@ -360,11 +360,12 @@ def confirm_dialog(message: str, key: str) -> bool:
     return False
 
 
-def file_uploader_with_preview(label: str, key: str, accept_multiple: bool = False):
-    """File uploader with preview for Excel files."""
+def file_uploader_with_preview(label: str, key: str, accept_multiple: bool = False, file_types: list[str] | None = None):
+    """File uploader with preview. file_types defaults to Excel extensions."""
+    types = file_types if file_types is not None else ["xlsx", "xls"]
     uploaded = st.file_uploader(
         label,
-        type=["xlsx", "xls"],
+        type=types,
         accept_multiple_files=accept_multiple,
         key=key
     )
