@@ -8,10 +8,13 @@ procurando rotulos tipo:
   Destino 1: ...
   Destino 2: ...
   Assinatura: ...
+
+Quando nenhum rotulo eh reconhecido, faz um segundo passe tratando cada
+linha que parece um nome proprio como um aluno (fallback).
 """
 
 from typing import List, Optional
-from PIL import Image
+from PIL import Image, ImageOps, ImageEnhance
 import io
 import re
 
@@ -28,6 +31,14 @@ def ocr_image_to_text(file_bytes: bytes) -> str:
 
     reader = easyocr.Reader(["pt"], gpu=False)
     imagem = Image.open(io.BytesIO(file_bytes)).convert("RGB")
+
+    # Pre-processamento: escala de cinza + autocontraste + aumento de
+    # contraste para melhorar a leitura de fotos de baixa qualidade,
+    # pouca iluminacao ou desfocadas.
+    imagem = ImageOps.grayscale(imagem)
+    imagem = ImageOps.autocontrast(imagem)
+    imagem = ImageEnhance.Contrast(imagem).enhance(1.5)
+
     img_array = np.array(imagem)
 
     resultados = reader.readtext(img_array)
@@ -37,12 +48,25 @@ def ocr_image_to_text(file_bytes: bytes) -> str:
 
 # ---------------------------------------------------------------------------
 # Rotulos que o parser procura (case-insensitive, com tolerancia a espacos)
+# e a erros comuns de OCR (ex.: endereco/endereço, opcao/opção)
 # ---------------------------------------------------------------------------
-NOME_RE = re.compile(r"nome\s*(?:do\s*aluno\s*|da\s*aluna\s*)?\s*[:]\s*(.*)", re.IGNORECASE)
-ENDERECO_RE = re.compile(r"endereco\s*[:]\s*(.*)", re.IGNORECASE)
-DESTINO1_RE = re.compile(r"destino\s*1\s*[:]\s*(.*)", re.IGNORECASE)
-DESTINO2_RE = re.compile(r"destino\s*2\s*[:]\s*(.*)", re.IGNORECASE)
+NOME_RE = re.compile(
+    r"(?:nome\s*(?:do\s*aluno\s*|da\s*aluna\s*)?|aluno\s*|aluna\s*|estudante\s*)\s*[:]\s*(.*)",
+    re.IGNORECASE,
+)
+ENDERECO_RE = re.compile(r"enderec[oô]\s*[:]\s*(.*)", re.IGNORECASE)
+DESTINO1_RE = re.compile(
+    r"(?:destino\s*1|opc[ãa]o\s*1|1[ªº]\s*opc[ãa]o)\s*[:]\s*(.*)", re.IGNORECASE
+)
+DESTINO2_RE = re.compile(
+    r"(?:destino\s*2|opc[ãa]o\s*2|2[ªº]\s*opc[ãa]o)\s*[:]\s*(.*)", re.IGNORECASE
+)
 ASSINATURA_RE = re.compile(r"assinatura\s*[:]\s*(.*)", re.IGNORECASE)
+
+# Linha que parece um nome proprio (duas ou mais palavras, inicial maiuscula)
+NOME_SOLTO_RE = re.compile(
+    r"^([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][a-záàâãéêíóôõúç]+(?:\s+[a-záàâãéêíóôõúç]+)+)$"
+)
 
 
 def _extrair_valor(linha: str, padrao: re.Pattern) -> Optional[str]:
@@ -57,6 +81,11 @@ def _eh_vazio(valor: Optional[str]) -> bool:
     return not valor or not valor.strip()
 
 
+def _eh_nome_solto(linha: str) -> bool:
+    """Verifica se a linha parece um nome proprio solto (sem rotulo)."""
+    return bool(NOME_SOLTO_RE.match(linha)) and len(linha.split()) >= 2
+
+
 def parse_ocr_text(texto: str) -> List[dict]:
     """
     Converte o texto bruto do OCR em uma lista de dicionarios de alunos.
@@ -65,12 +94,16 @@ def parse_ocr_text(texto: str) -> List[dict]:
     seguintes (endereco, destino 1, destino 2, assinatura) sao buscados
     nas linhas seguintes ate encontrar o proximo "Nome".
 
+    Se nenhum aluno for encontrado pelos rotulos, um segundo passe trata
+    cada linha que parece um nome proprio como um aluno (fallback).
+
     Retorna lista de dicts com chaves:
       nome, endereco, destino_1, destino_2, assinatura (bool)
     """
     alunos: List[dict] = []
     linhas = [l.strip() for l in texto.splitlines() if l.strip()]
 
+    # ---- Primeiro passe: rotulos conhecidos ----
     atual: Optional[dict] = None
 
     for linha in linhas:
@@ -89,6 +122,15 @@ def parse_ocr_text(texto: str) -> List[dict]:
             continue
 
         if atual is None:
+            # Fallback imediato: linha solta que parece um nome inicia um aluno
+            if _eh_nome_solto(linha):
+                atual = {
+                    "nome": linha,
+                    "endereco": "",
+                    "destino_1": "",
+                    "destino_2": "",
+                    "assinatura": False,
+                }
             continue
 
         endereco = _extrair_valor(linha, ENDERECO_RE)
@@ -108,12 +150,34 @@ def parse_ocr_text(texto: str) -> List[dict]:
 
         assinatura = _extrair_valor(linha, ASSINATURA_RE)
         if assinatura is not None:
-            atual["assinatura"] = assinatura.lower() not in ("não", "nao", "n", "0", "falso", "false")
+            atual["assinatura"] = assinatura.lower() not in (
+                "não",
+                "nao",
+                "n",
+                "0",
+                "falso",
+                "false",
+            )
             continue
 
     # Salva o ultimo aluno
     if atual is not None:
         alunos.append(atual)
+
+    # ---- Segundo passe: se nada foi encontrado, tratar cada linha
+    # parecido com nome como um aluno isolado ----
+    if not alunos:
+        for linha in linhas:
+            if _eh_nome_solto(linha):
+                alunos.append(
+                    {
+                        "nome": linha,
+                        "endereco": "",
+                        "destino_1": "",
+                        "destino_2": "",
+                        "assinatura": False,
+                    }
+                )
 
     return alunos
 

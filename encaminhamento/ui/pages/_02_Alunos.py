@@ -4,7 +4,7 @@ from encaminhamento.ui.components import (
     sidebar_navigation, school_selector, file_uploader_with_preview, seletor_abas,
 )
 from encaminhamento.services.excel_import import parse_modeloupload_bytes
-from encaminhamento.services.ocr_import import extrair_alunos_da_imagem
+from encaminhamento.services.ocr_import import extrair_alunos_da_imagem, ocr_image_to_text
 from encaminhamento.services.excel_export import export_students_to_excel, create_template_modeloupload, ANO_PADRAO
 from encaminhamento.services.pdf_generator import generate_student_list_pdf
 from encaminhamento.database import get_session
@@ -454,6 +454,7 @@ def _aba_editar(filtro_status: str = None, filtro_destino: int = None,
     with c1:
         if st.button("💾 Salvar alterações", type="primary", use_container_width=True):
             mudancas = 0
+            erros = []
             for _, row in edited.iterrows():
                 sid = int(row["ID"])
                 original = df[df["ID"] == sid].iloc[0]
@@ -463,22 +464,25 @@ def _aba_editar(filtro_status: str = None, filtro_destino: int = None,
                 d1 = (row["Destino 1"] or "").strip()
                 d2 = (row["Destino 2"] or "").strip()
 
-            with get_session() as session:
-                try:
-                    update_student(
-                        session,
-                        sid,
-                        name=format_student_name(row["Nome"]),
-                        address=row["Endereço"],
-                        destination_school_1_id=get_or_create_school_from_name(d1, is_destination=True) if d1 else None,
-                        destination_school_2_id=get_or_create_school_from_name(d2, is_destination=True) if d2 else None,
-                        responsible_signature=bool(row["Assinatura"]),
-                    )
-                except ValueError as e:
-                    st.error(str(e))
-                    return
-            mudancas += 1
+                with get_session() as session:
+                    try:
+                        update_student(
+                            session,
+                            sid,
+                            name=format_student_name(row["Nome"]),
+                            address=row["Endereço"],
+                            destination_school_1_id=get_or_create_school_from_name(d1, is_destination=True) if d1 else None,
+                            destination_school_2_id=get_or_create_school_from_name(d2, is_destination=True) if d2 else None,
+                            responsible_signature=bool(row["Assinatura"]),
+                        )
+                    except ValueError as e:
+                        erros.append(f"Linha {sid}: {e}")
+                        continue
+                mudancas += 1
 
+            if erros:
+                for erro in erros:
+                    st.error(erro)
             st.success(f"{mudancas} aluno(s) atualizado(s)." if mudancas else "Nenhuma alteração.")
             if mudancas:
                 st.rerun()
@@ -632,7 +636,20 @@ def _aba_foto_scan():
         alunos = extrair_alunos_da_imagem(file_bytes)
 
     if not alunos:
-        st.warning("Nenhum aluno foi reconhecido na imagem. Tente uma foto mais clara ou com mais contraste.")
+        texto_bruto = ocr_image_to_text(file_bytes)
+        if texto_bruto.strip():
+            with st.expander("🔍 Ver texto extraído pelo OCR (debug)", expanded=False):
+                st.text_area("Texto bruto", texto_bruto, height=200, key="ocr_texto_bruto")
+            st.warning(
+                "OCR leu texto da imagem, mas nenhum aluno foi reconhecido. "
+                "Verifique o texto extraído acima e confira se os rótulos "
+                "(Nome, Endereço, Destino 1, Destino 2, Assinatura) estão legíveis."
+            )
+        else:
+            st.error(
+                "OCR não detectou texto nenhum na imagem. "
+                "Tente uma foto mais clara, com mais contraste e melhor iluminação."
+            )
         return
 
     st.success(f"**{len(alunos)} aluno(s) extraído(s)** da imagem.")

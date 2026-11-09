@@ -401,21 +401,29 @@ def _situacao_aluno(ano_encaminhamento: int = None):
                 with c1:
                     if st.button("💾 Salvar", key=f"sit_aluno_salvar_{chave_aberta}", type="primary", width="stretch"):
                         mudancas = 0
-                        for _, row in edited.iterrows():
-                            sid = int(row["ID"])
-                            original = df[df["ID"] == sid].iloc[0]
-                            if row.equals(original):
-                                continue
-                            d1 = (row.get("1ª opção") or "").strip()
-                            d2 = (row.get("2ª opção") or "").strip()
-                            with get_session() as session:
-                                update_student(
-                                    session, sid,
-                                    name=row["Aluno"], address=row["Endereço"],
-                                    destination_school_1_id=(get_or_create_school_from_name(d1, is_destination=True) if d1 else None),
-                                    destination_school_2_id=(get_or_create_school_from_name(d2, is_destination=True) if d2 else None),
-                                )
-                            mudancas += 1
+                        erros = []
+                        with get_session() as session:
+                            for _, row in edited.iterrows():
+                                sid = int(row["ID"])
+                                original = df[df["ID"] == sid].iloc[0]
+                                if row.equals(original):
+                                    continue
+                                d1 = (row.get("1ª opção") or "").strip()
+                                d2 = (row.get("2ª opção") or "").strip()
+                                try:
+                                    update_student(
+                                        session, sid,
+                                        name=row["Aluno"], address=row["Endereço"],
+                                        destination_school_1_id=(get_or_create_school_from_name(d1, is_destination=True) if d1 else None),
+                                        destination_school_2_id=(get_or_create_school_from_name(d2, is_destination=True) if d2 else None),
+                                    )
+                                except ValueError as e:
+                                    erros.append(f"Linha {sid}: {e}")
+                                    continue
+                                mudancas += 1
+                        if erros:
+                            for erro in erros:
+                                st.error(erro)
                         if mudancas:
                             get_allocation_service().run_allocation()
                             st.success(f"{mudancas} atualizado(s).")
